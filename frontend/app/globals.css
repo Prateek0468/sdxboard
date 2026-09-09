@@ -1,0 +1,74 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+
+.app-shell {
+  height: 100vh;
+  display: flex;
+  color: #172033;
+}
+
+.palette {
+  width: 220px;
+  flex: 0 0 220px;
+  padding: 20px 14px;
+  border-right: 1px solid #cbd5e1;
+  background: #f8fafc;
+  overflow-y: auto;
+}
+
+.palette h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.palette p {
+  margin: 0 0 20px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.palette-list {
+  display: grid;
+  gap: 8px;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  background: #fff;
+  cursor: grab;
+  font-size: 14px;
+}
+
+.palette-item:active {
+  cursor: grabbing;
+}
+
+.palette-item span {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border-radius: 2px;
+}
+
+.canvas {
+  min-width: 0;
+  flex: 1;
+}
+
+.react-flow__node.selected {
+  box-shadow: 0 0 0 2px #172033;
+}
