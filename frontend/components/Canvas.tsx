@@ -11,6 +11,11 @@ import ReactFlow, {
   ReactFlowInstance,
 } from "reactflow";
 import { useGraphStore, ComponentType } from "../lib/store";
+import SystemNode from "./SystemNode";
+import DeletableEdge from "./DeletableEdge";
+
+const nodeTypes = { system: SystemNode };
+const edgeTypes = { default: DeletableEdge };
 
 interface CanvasProps {
   chatOpen: boolean;
@@ -88,6 +93,8 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onInit={(instance) => {
           flowRef.current = instance;
         }}

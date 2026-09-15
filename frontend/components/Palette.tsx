@@ -1,4 +1,5 @@
 import { componentTypes, ComponentType } from "../lib/store";
+import ComponentIcon from "./ComponentIcon";
 
 export default function Palette() {
   return (
@@ -7,7 +8,7 @@ export default function Palette() {
       <p className="text-slate-500 text-[13px] leading-relaxed mb-5">
         Drag a component onto the canvas.
       </p>
-      <div className="grid gap-2">
+      <div className="grid gap-1.5">
         {componentTypes.map((item) => (
           <PaletteItem key={item.type} {...item} />
         ))}
@@ -19,7 +20,6 @@ export default function Palette() {
 function PaletteItem({
   type,
   label,
-  color,
 }: {
   type: ComponentType;
   label: string;
@@ -27,18 +27,15 @@ function PaletteItem({
 }) {
   return (
     <div
-      className="flex items-center gap-2.5 p-2.5 border border-slate-300 rounded bg-white cursor-grab text-sm active:cursor-grabbing"
+      className="flex items-center gap-3 p-2 border border-transparent rounded-md cursor-grab hover:bg-slate-200/60 hover:border-slate-300 transition-all active:cursor-grabbing"
       draggable
       onDragStart={(event) => {
         event.dataTransfer.setData("application/reactflow", type);
         event.dataTransfer.effectAllowed = "move";
       }}
     >
-      <span
-        className="w-3 h-3 flex-shrink-0 rounded-sm"
-        style={{ backgroundColor: color }}
-      />
-      {label}
+      <ComponentIcon type={type} size={22} className="text-slate-600 flex-shrink-0" />
+      <span className="text-[12px] text-slate-500 leading-none">{label}</span>
     </div>
   );
 }

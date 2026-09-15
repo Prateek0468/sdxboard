@@ -17,7 +17,15 @@ export type ComponentType = typeof componentTypes[number]["type"];
 
 const api = process.env.NEXT_PUBLIC_API_URL || "/api";
 const typeInfo = (type: string) => componentTypes.find((item) => item.type === type) || componentTypes[0];
-const asNode = (component: ApiComponent): Node => ({ id: component.id, position: { x: component.x, y: component.y }, data: { label: component.label }, sourcePosition: Position.Right, targetPosition: Position.Left, style: { background: typeInfo(component.type).color, color: "#fff", border: "1px solid #334155", borderRadius: 3, padding: "10px 14px", minWidth: 110, textAlign: "center" } });
+const asNode = (component: ApiComponent): Node => {
+  const info = typeInfo(component.type);
+  return {
+    id: component.id,
+    type: "system",
+    position: { x: component.x, y: component.y },
+    data: { label: component.label, type: component.type, color: info.color },
+  };
+};
 const asEdge = (edge: ApiEdge): Edge => ({ id: edge.id, source: edge.sourceId, target: edge.targetId, label: edge.label || undefined });
 
 type ApiComponent = { id: string; type: string; label: string; x: number; y: number; metadata?: unknown };
