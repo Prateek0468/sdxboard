@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"system-design-canvas/backend/agent"
+
 	"github.com/google/uuid"
 )
 
@@ -30,15 +32,16 @@ type edge struct {
 }
 
 type server struct {
-	db         *sql.DB
-	corsOrigin string
+	db           *sql.DB
+	corsOrigin   string
+	agentHandler *agent.Handler
 }
 
-func newServer(db *sql.DB, corsOrigin string) *server {
+func newServer(db *sql.DB, corsOrigin string, agentHandler *agent.Handler) *server {
 	if corsOrigin == "" {
 		corsOrigin = "http://localhost:3000"
 	}
-	return &server{db: db, corsOrigin: corsOrigin}
+	return &server{db: db, corsOrigin: corsOrigin, agentHandler: agentHandler}
 }
 
 func (s *server) routes() http.Handler {
@@ -49,6 +52,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/components/{id}", s.deleteComponent)
 	mux.HandleFunc("POST /api/edges", s.createEdge)
 	mux.HandleFunc("DELETE /api/edges/{id}", s.deleteEdge)
+	if s.agentHandler != nil {
+		mux.HandleFunc("POST /api/agent/message", s.agentHandler.HandleMessage)
+	}
 	return s.withCORS(mux)
 }
 

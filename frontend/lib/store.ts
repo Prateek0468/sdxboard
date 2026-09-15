@@ -47,3 +47,53 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   removeNodes: async (ids) => { set((state) => ({ nodes: state.nodes.filter((node) => !ids.includes(node.id)), edges: state.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); await Promise.all(ids.map((id) => request(`/components/${id}`, { method: "DELETE" }))); },
   removeEdges: async (ids) => { set((state) => ({ edges: state.edges.filter((edge) => !ids.includes(edge.id)) })); await Promise.all(ids.map((id) => request(`/edges/${id}`, { method: "DELETE" }))); },
 }));
+
+// --- Chat store ---
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  actions?: { action: string; detail: string }[];
+};
+
+type ChatStore = {
+  messages: ChatMessage[];
+  sending: boolean;
+  status: string;
+  sendMessage: (text: string) => Promise<void>;
+  clearMessages: () => void;
+};
+
+export const useChatStore = create<ChatStore>((set, get) => ({
+  messages: [],
+  sending: false,
+  status: "",
+  sendMessage: async (text: string) => {
+    if (!text.trim() || get().sending) return;
+    set((state) => ({
+      messages: [...state.messages, { role: "user", content: text }],
+      sending: true,
+      status: "Thinking...",
+    }));
+    try {
+      const res = await request<{ response: string; actions?: { action: string; detail: string }[] }>("/agent/message", {
+        method: "POST",
+        body: JSON.stringify({ message: text }),
+      });
+      set((state) => ({
+        messages: [...state.messages, { role: "assistant", content: res.response, actions: res.actions }],
+        status: "",
+      }));
+      useGraphStore.getState().load();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      set((state) => ({
+        messages: [...state.messages, { role: "assistant", content: `Sorry, something went wrong: ${msg}` }],
+        status: "",
+      }));
+    } finally {
+      set({ sending: false });
+    }
+  },
+  clearMessages: () => set({ messages: [], status: "" }),
+}));

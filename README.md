@@ -31,10 +31,37 @@ DB_PATH=./data/app.db go run .
 ```bash
 cd frontend
 npm install
-NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev
+NEXT_PUBLIC_API_URL=http://localhost:3000 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## AI Agent Setup
+
+The agent uses [OpenRouter](https://openrouter.ai) to access free AI models. No local model installation required.
+
+1. Get a free API key at [openrouter.ai/keys](https://openrouter.ai/keys)
+2. Set the environment variable:
+
+```bash
+export OPENROUTER_API_KEY=your-key-here
+```
+
+Optional overrides:
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENROUTER_API_KEY` | _(none)_ | Required. Your OpenRouter API key. |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai` | API base URL. |
+| `AI_MODEL` | `openrouter/free` | Model slug. `openrouter/free` auto-selects a free model. |
+
+When using Docker, the key is passed through from your host environment:
+
+```bash
+OPENROUTER_API_KEY=your-key docker compose up --build
+```
+
+Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works as a diagram-only tool.
 
 ## What Docker Is Doing
 
@@ -55,6 +82,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - `DELETE /api/components/:id`
 - `POST /api/edges`
 - `DELETE /api/edges/:id`
+- `POST /api/agent/message` — send a natural language prompt to the AI agent
 
 ---
 
@@ -77,15 +105,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Phase 1 — Minimal Agent Loop
 
-- [ ] Pick local model via Ollama (e.g. Qwen2.5) + define a swap-in interface for hosted models later
-- [ ] Backend endpoint `POST /api/agent/message` that takes a user prompt
-- [ ] Implement `inspect_architecture` tool (returns current graph as JSON to model)
-- [ ] Implement `create_component` tool
-- [ ] Implement `connect_components` tool
-- [ ] Implement `delete_component` tool
-- [ ] Basic agent loop: prompt → tool call → execute → feed result back → repeat until model stops
-- [ ] Frontend: simple chat input box next to canvas
-- [ ] Canvas updates live as agent creates components (poll or websocket)
+- [x] Pick model via OpenRouter free tier (no local install required)
+- [x] Backend endpoint `POST /api/agent/message` that takes a user prompt
+- [x] Implement `inspect_architecture` tool (returns current graph as JSON to model)
+- [x] Implement `create_component` tool
+- [x] Implement `connect_components` tool
+- [x] Implement `delete_component` tool
+- [x] Implement `update_component` tool
+- [x] Basic agent loop: prompt → tool call → execute → feed result back → repeat until model stops
+- [x] Frontend: chat sidebar next to canvas
+- [x] Canvas updates live as agent creates components (poll after agent turn)
 - [ ] Test: "Design a URL shortener" produces a sensible starter architecture
 - [ ] Test: "Add caching" correctly modifies existing graph, not a fresh one
 

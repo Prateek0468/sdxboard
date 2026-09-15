@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactFlow, {
   addEdge,
   Background,
@@ -11,11 +11,19 @@ import ReactFlow, {
   OnConnect,
   ReactFlowInstance,
 } from "reactflow";
-import { useGraphStore, componentTypes, ComponentType } from "../lib/store";
+import {
+  useGraphStore,
+  useChatStore,
+  componentTypes,
+  ComponentType,
+} from "../lib/store";
 
 export default function CanvasPage() {
   const wrapper = useRef<HTMLDivElement>(null);
   const flow = useRef<ReactFlowInstance>();
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [chatOpen, setChatOpen] = useState(true);
+  const [input, setInput] = useState("");
   const {
     nodes,
     edges,
@@ -26,6 +34,7 @@ export default function CanvasPage() {
     removeNodes,
     removeEdges,
   } = useGraphStore();
+  const { messages, sending, status, sendMessage } = useChatStore();
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   useEffect(() => {
@@ -35,6 +44,16 @@ export default function CanvasPage() {
   useEffect(() => {
     return () => timers.current.forEach(clearTimeout);
   }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = useCallback(() => {
+    if (!input.trim() || sending) return;
+    sendMessage(input);
+    setInput("");
+  }, [input, sending, sendMessage]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -127,7 +146,68 @@ export default function CanvasPage() {
           <Background gap={20} size={1} />
           <Controls />
         </ReactFlow>
+        <button
+          className="chat-toggle"
+          onClick={() => setChatOpen((prev) => !prev)}
+          title={chatOpen ? "Close chat" : "Open chat"}
+        >
+          {chatOpen ? "\u2715" : "\uD83D\uDCAC"}
+        </button>
       </section>
+      {chatOpen && (
+        <aside className="chat-panel">
+          <div className="chat-header">
+            <h2>AI Agent</h2>
+          </div>
+          <div className="chat-messages">
+            {messages.length === 0 && (
+              <p className="chat-empty">
+                Ask me to design a system architecture, e.g. &ldquo;Design a URL
+                shortener&rdquo;
+              </p>
+            )}
+            {messages.map((msg, i) => (
+              <div key={i} className={`chat-message chat-${msg.role}`}>
+                <div className="chat-bubble">{msg.content}</div>
+                {msg.actions && msg.actions.length > 0 && (
+                  <div className="chat-actions">
+                    {msg.actions.map((a, j) => (
+                      <span key={j} className="chat-action-tag">
+                        {a.action}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          {sending && (
+            <div className="chat-status">
+              <span className="chat-spinner" />
+              {status || "Working..."}
+            </div>
+          )}
+          <form
+            className="chat-input"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Describe your system..."
+              disabled={sending}
+            />
+            <button type="submit" disabled={sending || !input.trim()}>
+              {sending ? "..." : "Send"}
+            </button>
+          </form>
+        </aside>
+      )}
     </main>
   );
 }
