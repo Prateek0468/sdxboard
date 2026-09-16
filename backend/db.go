@@ -6,51 +6,51 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func openDatabase() (*sql.DB, error) {
+func openDatabase() (*sql.DB, bool, error) {
 	dbURL := os.Getenv("DATABASE_URL")
 
 	if dbURL != "" {
 		log.Println("connecting to postgresql...")
 		db, err := sql.Open("postgres", dbURL)
 		if err != nil {
-			return nil, fmt.Errorf("open postgres: %w", err)
+			return nil, false, fmt.Errorf("open postgres: %w", err)
 		}
 		if err := db.Ping(); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("ping postgres: %w", err)
+			return nil, false, fmt.Errorf("ping postgres: %w", err)
 		}
 		if err := migrate(db); err != nil {
 			db.Close()
-			return nil, err
+			return nil, false, err
 		}
-		return db, nil
+		return db, true, nil
 	}
 
-	// Fallback to SQLite — no setup required.
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "./data/app.db"
 	}
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		return nil, fmt.Errorf("create database directory: %w", err)
+		return nil, false, fmt.Errorf("create database directory: %w", err)
 	}
 
 	log.Printf("no DATABASE_URL set, using sqlite (%s)", dbPath)
 	db, err := sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+		return nil, false, fmt.Errorf("open sqlite: %w", err)
 	}
 	db.SetMaxOpenConns(1)
 	if err := migrate(db); err != nil {
 		db.Close()
-		return nil, err
+		return nil, false, err
 	}
-	return db, nil
+	return db, false, nil
 }
 
 func migrate(db *sql.DB) error {
@@ -76,6 +76,10 @@ func migrate(db *sql.DB) error {
 		);
 	`)
 	if err != nil {
+		// SQLite uses ? for placeholders; PostgreSQL uses $1. The schema above
+		// uses no placeholders, so it works for both. If we ever need
+		// parameterised migrations, branch on strings.Contains(err.Error(), "pq").
+		_ = strings.Contains(err.Error(), "pq")
 		return fmt.Errorf("initialize schema: %w", err)
 	}
 	return nil

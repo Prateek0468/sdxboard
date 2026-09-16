@@ -2,16 +2,24 @@ import { create } from "zustand";
 import { Edge, Node, Position, addEdge } from "reactflow";
 
 export const componentTypes = [
-  { type: "client", label: "Client", color: "#3b82f6" },
-  { type: "dns", label: "DNS", color: "#8b5cf6" },
-  { type: "load-balancer", label: "Load Balancer", color: "#ec4899" },
-  { type: "api-server", label: "API Server", color: "#f97316" },
-  { type: "database", label: "Database", color: "#14b8a6" },
-  { type: "cache", label: "Cache", color: "#eab308" },
-  { type: "queue", label: "Queue", color: "#ef4444" },
-  { type: "cdn", label: "CDN", color: "#06b6d4" },
-  { type: "worker", label: "Worker", color: "#6366f1" },
-  { type: "object-storage", label: "Object Storage", color: "#22c55e" },
+  { type: "client", label: "Client", color: "#3b82f6", category: "client" },
+  { type: "dns", label: "DNS", color: "#8b5cf6", category: "network" },
+  { type: "load-balancer", label: "Load Balancer", color: "#ec4899", category: "network" },
+  { type: "api-gateway", label: "API Gateway", color: "#d946ef", category: "network" },
+  { type: "api-server", label: "API Server", color: "#f97316", category: "compute" },
+  { type: "serverless", label: "Serverless", color: "#f97316", category: "compute" },
+  { type: "worker", label: "Worker", color: "#6366f1", category: "compute" },
+  { type: "ml-service", label: "ML Service", color: "#8b5cf6", category: "compute" },
+  { type: "database", label: "Database", color: "#14b8a6", category: "storage" },
+  { type: "cache", label: "Cache", color: "#eab308", category: "storage" },
+  { type: "object-storage", label: "Object Storage", color: "#22c55e", category: "storage" },
+  { type: "search-engine", label: "Search Engine", color: "#06b6d4", category: "storage" },
+  { type: "vector-db", label: "Vector DB", color: "#14b8a6", category: "storage" },
+  { type: "queue", label: "Queue", color: "#ef4444", category: "messaging" },
+  { type: "message-broker", label: "Message Broker", color: "#ef4444", category: "messaging" },
+  { type: "cdn", label: "CDN", color: "#06b6d4", category: "edge" },
+  { type: "cdn-edge", label: "CDN Edge", color: "#06b6d4", category: "edge" },
+  { type: "monitoring", label: "Monitoring", color: "#64748b", category: "ops" },
 ] as const;
 export type ComponentType = typeof componentTypes[number]["type"];
 
@@ -54,6 +62,16 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   updatePosition: async (id, position) => { const node = get().nodes.find((item) => item.id === id); if (!node) return; set((state) => ({ nodes: state.nodes.map((item) => item.id === id ? { ...item, position } : item) })); await request(`/components/${id}`, { method: "PUT", body: JSON.stringify({ label: String(node.data.label), x: position.x, y: position.y, metadata: null }) }); },
   removeNodes: async (ids) => { set((state) => ({ nodes: state.nodes.filter((node) => !ids.includes(node.id)), edges: state.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); await Promise.all(ids.map((id) => request(`/components/${id}`, { method: "DELETE" }))); },
   removeEdges: async (ids) => { set((state) => ({ edges: state.edges.filter((edge) => !ids.includes(edge.id)) })); await Promise.all(ids.map((id) => request(`/edges/${id}`, { method: "DELETE" }))); },
+}));
+
+// --- Selection store ---
+
+export const useSelectionStore = create<{
+  selectedNodeId: string | null;
+  selectNode: (id: string | null) => void;
+}>((set) => ({
+  selectedNodeId: null,
+  selectNode: (id) => set({ selectedNodeId: id }),
 }));
 
 // --- Chat store ---

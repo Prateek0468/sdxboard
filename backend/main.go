@@ -14,11 +14,13 @@ func main() {
 	godotenv.Load()
 	godotenv.Load(".env.local")
 
-	db, err := openDatabase()
+	db, isPostgres, err := openDatabase()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	agentDB := agent.NewDB(db, isPostgres)
 
 	var agentHandler *agent.Handler
 	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
@@ -27,7 +29,7 @@ func main() {
 			apiKey,
 			os.Getenv("AI_MODEL"),
 		)
-		agentHandler = agent.NewHandler(db, client)
+		agentHandler = agent.NewHandler(agentDB, client)
 		log.Println("agent enabled (OpenRouter)")
 	} else {
 		log.Println("agent disabled (set OPENROUTER_API_KEY to enable)")

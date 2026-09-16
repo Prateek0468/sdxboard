@@ -95,6 +95,7 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        defaultEdgeOptions={{ type: "default", markerEnd: "arrow" }}
         onInit={(instance) => {
           flowRef.current = instance;
         }}
@@ -107,6 +108,21 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
       >
         <Background gap={20} size={1} />
         <Controls />
+        <svg style={{ position: "absolute", width: 0, height: 0 }}>
+          <defs>
+            <marker
+              id="arrow"
+              viewBox="0 0 10 10"
+              refX="10"
+              refY="5"
+              markerWidth="8"
+              markerHeight="8"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+            </marker>
+          </defs>
+        </svg>
       </ReactFlow>
       <button
         className="absolute top-3 right-3 z-10 w-9 h-9 border border-slate-300 rounded-md bg-white cursor-pointer text-base flex items-center justify-center shadow-sm hover:bg-slate-100"

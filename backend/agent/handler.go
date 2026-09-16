@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 )
@@ -10,7 +9,7 @@ type Handler struct {
 	loop *Loop
 }
 
-func NewHandler(db *sql.DB, client *Client) *Handler {
+func NewHandler(db *DB, client *Client) *Handler {
 	return &Handler{
 		loop: NewLoop(client, db),
 	}

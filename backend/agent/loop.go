@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,18 +15,19 @@ When a user asks you to design something, inspect the current state first, then 
 Place components with reasonable spacing: use x increments of ~200 and y increments of ~150.
 Connect components logically (e.g., client → load balancer → api server → database).
 
-Available component types: client, dns, load-balancer, api-server, database, cache, queue, cdn, worker, object-storage.
+Available component types: client, dns, load-balancer, api-gateway, api-server, database, cache, queue, cdn, worker, object-storage, message-broker, search-engine, vector-db, ml-service, monitoring, serverless, cdn-edge.
 
+When the user asks to remove, delete, or modify something, use find_component first to get the ID, then act on it.
 Always explain what you're doing in plain language as you make changes.`
 
-const maxIterations = 5
+const maxIterations = 8
 
 type Loop struct {
 	client *Client
-	db     *sql.DB
+	db     *DB
 }
 
-func NewLoop(client *Client, db *sql.DB) *Loop {
+func NewLoop(client *Client, db *DB) *Loop {
 	return &Loop{client: client, db: db}
 }
 
@@ -55,7 +55,6 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 			return nil, fmt.Errorf("model call failed: %w", err)
 		}
 
-		// No tool calls — model is done, return its text response.
 		if len(resp.ToolCalls) == 0 {
 			return &RunResult{
 				Response: resp.Content,
@@ -63,10 +62,8 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 			}, nil
 		}
 
-		// Append the assistant message (with tool calls) to history.
 		messages = append(messages, *resp)
 
-		// Execute each tool call and collect results.
 		for _, tc := range resp.ToolCalls {
 			log.Printf("agent tool call: %s", tc.Function.Name)
 
@@ -89,7 +86,6 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 		}
 	}
 
-	// Exceeded max iterations — return what we have.
 	return &RunResult{
 		Response: "I've made several changes to the architecture. Let me know if you'd like any adjustments.",
 		Actions:  allActions,

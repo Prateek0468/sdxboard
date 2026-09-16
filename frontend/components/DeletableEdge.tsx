@@ -32,7 +32,7 @@ export default function DeletableEdge({
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} label={label} />
+      <BaseEdge id={id} path={edgePath} label={label} markerEnd="url(#arrow)" />
       <foreignObject
         x={labelX - 10}
         y={labelY - 10}

@@ -1,6 +1,6 @@
 import { Handle, Position, NodeProps, useReactFlow } from "reactflow";
 import ComponentIcon from "./ComponentIcon";
-import { ComponentType } from "../lib/store";
+import { ComponentType, useSelectionStore } from "../lib/store";
 
 export interface SystemNodeData {
   label: string;
@@ -10,6 +10,7 @@ export interface SystemNodeData {
 
 export default function SystemNode({ id, data }: NodeProps<SystemNodeData>) {
   const { deleteElements } = useReactFlow();
+  const selectNode = useSelectionStore((s) => s.selectNode);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -17,7 +18,10 @@ export default function SystemNode({ id, data }: NodeProps<SystemNodeData>) {
   };
 
   return (
-    <div className="group relative flex flex-col items-center gap-1 cursor-pointer">
+    <div
+      className="group relative flex flex-col items-center gap-1 cursor-pointer"
+      onClick={(e) => { e.stopPropagation(); selectNode(id); }}
+    >
       <Handle type="target" position={Position.Left} className="!w-2 !h-2 !bg-slate-400" />
       <ComponentIcon type={data.type} size={32} className="text-slate-700" />
       <span className="text-[11px] text-slate-500 whitespace-nowrap">{data.label}</span>
