@@ -38,7 +38,7 @@ func Definitions() []ToolDef {
 			Type: "function",
 			Function: ToolDefFunc{
 				Name:        "inspect_architecture",
-				Description: "Returns the current system architecture as JSON with all components and edges. Use this to understand the current state before making changes.",
+				Description: "Returns ALL components and edges on the canvas. Always call this first to see what exists.",
 				Parameters:  json.RawMessage(`{"type":"object","properties":{},"required":[]}`),
 			},
 		},
@@ -46,11 +46,11 @@ func Definitions() []ToolDef {
 			Type: "function",
 			Function: ToolDefFunc{
 				Name:        "find_component",
-				Description: "Finds components by label or type. Returns matching component IDs, types, and labels. Use this before deleting or updating to get the component ID.",
+				Description: "Search for components by label or type. Returns matching IDs. Call this to find a component before deleting or updating it.",
 				Parameters: json.RawMessage(`{
 					"type":"object",
 					"properties":{
-						"query":{"type":"string","description":"Search term to match against component labels or types (case-insensitive)"}
+						"query":{"type":"string","description":"Search term (matches label or type, case-insensitive)"}
 					},
 					"required":["query"]
 				}`),
@@ -60,15 +60,15 @@ func Definitions() []ToolDef {
 			Type: "function",
 			Function: ToolDefFunc{
 				Name:        "create_component",
-				Description: "Creates a new component on the diagram. Types: client, dns, load-balancer, api-gateway, api-server, database, cache, queue, cdn, worker, object-storage, message-broker, search-engine, vector-db, ml-service, monitoring, serverless, cdn-edge.",
+				Description: "Creates a new component. Types: client, dns, load-balancer, api-gateway, api-server, database, cache, queue, cdn, worker, object-storage, message-broker, search-engine, vector-db, ml-service, monitoring, serverless, cdn-edge.",
 				Parameters: json.RawMessage(`{
 					"type":"object",
 					"properties":{
 						"type":{"type":"string","description":"Component type"},
-						"label":{"type":"string","description":"Display label for the component"},
+						"label":{"type":"string","description":"Display label"},
 						"x":{"type":"number","description":"X position on canvas"},
 						"y":{"type":"number","description":"Y position on canvas"},
-						"metadata":{"type":"object","description":"Optional metadata (e.g. capacity, region, engine)"}
+						"metadata":{"type":"object","description":"Optional metadata"}
 					},
 					"required":["type","label","x","y"]
 				}`),
@@ -78,15 +78,43 @@ func Definitions() []ToolDef {
 			Type: "function",
 			Function: ToolDefFunc{
 				Name:        "connect_components",
-				Description: "Creates a directional edge (connection) between two components. The arrow points from source to target, showing data flow direction.",
+				Description: "Creates a connection between two components. Arrows show flow direction from source to target.",
 				Parameters: json.RawMessage(`{
 					"type":"object",
 					"properties":{
 						"source_id":{"type":"string","description":"ID of the source component"},
 						"target_id":{"type":"string","description":"ID of the target component"},
-						"label":{"type":"string","description":"Optional label for the edge (e.g. 'HTTPS', 'TCP', 'gRPC')"}
+						"label":{"type":"string","description":"Edge label (e.g. 'HTTPS', 'TCP')"}
 					},
 					"required":["source_id","target_id"]
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolDefFunc{
+				Name:        "delete_component",
+				Description: "Deletes a component by its exact ID. Use find_component first if you don't have the ID.",
+				Parameters: json.RawMessage(`{
+					"type":"object",
+					"properties":{
+						"id":{"type":"string","description":"Exact component ID to delete"}
+					},
+					"required":["id"]
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolDefFunc{
+				Name:        "delete_by_label",
+				Description: "Finds and deletes a component by its label (partial match, case-insensitive). This is the easiest way to remove something.",
+				Parameters: json.RawMessage(`{
+					"type":"object",
+					"properties":{
+						"label":{"type":"string","description":"Label to search for and delete"}
+					},
+					"required":["label"]
 				}`),
 			},
 		},
@@ -103,20 +131,6 @@ func Definitions() []ToolDef {
 						"x":{"type":"number","description":"New X position"},
 						"y":{"type":"number","description":"New Y position"},
 						"metadata":{"type":"object","description":"New metadata (replaces existing)"}
-					},
-					"required":["id"]
-				}`),
-			},
-		},
-		{
-			Type: "function",
-			Function: ToolDefFunc{
-				Name:        "delete_component",
-				Description: "Deletes a component and all its connected edges from the diagram.",
-				Parameters: json.RawMessage(`{
-					"type":"object",
-					"properties":{
-						"id":{"type":"string","description":"ID of the component to delete"}
 					},
 					"required":["id"]
 				}`),
@@ -225,6 +239,29 @@ func ExecuteTool(db *DB, name string, arguments json.RawMessage, callID string) 
 			result.Content = fmt.Sprintf("Error deleting component: %v", err)
 		} else {
 			result.Content = fmt.Sprintf("Deleted component %s", args.ID)
+		}
+
+	case "delete_by_label":
+		var args struct {
+			Label string `json:"label"`
+		}
+		if err := json.Unmarshal(arguments, &args); err != nil {
+			result.Content = fmt.Sprintf("Error parsing arguments: %v", err)
+			return result
+		}
+		matches, err := findComponent(db, args.Label)
+		if err != nil {
+			result.Content = fmt.Sprintf("Error: %v", err)
+		} else if len(matches) == 0 {
+			result.Content = fmt.Sprintf("No component found with label '%s'", args.Label)
+		} else {
+			deleted := 0
+			for _, m := range matches {
+				if delErr := deleteComponent(db, m.ID); delErr == nil {
+					deleted++
+				}
+			}
+			result.Content = fmt.Sprintf("Deleted %d component(s) matching '%s'", deleted, args.Label)
 		}
 
 	default:

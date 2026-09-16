@@ -112,14 +112,25 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
           <defs>
             <marker
               id="arrow"
-              viewBox="0 0 10 10"
-              refX="10"
-              refY="5"
+              viewBox="0 0 12 12"
+              refX="11"
+              refY="6"
               markerWidth="8"
               markerHeight="8"
-              orient="auto-start-reverse"
+              orient="auto"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+              <path d="M 0 1 L 10 6 L 0 11 z" fill="#94a3b8" />
+            </marker>
+            <marker
+              id="arrow-reverse"
+              viewBox="0 0 12 12"
+              refX="1"
+              refY="6"
+              markerWidth="8"
+              markerHeight="8"
+              orient="auto"
+            >
+              <path d="M 12 1 L 2 6 L 12 11 z" fill="#94a3b8" />
             </marker>
           </defs>
         </svg>
