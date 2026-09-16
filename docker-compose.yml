@@ -1,19 +1,28 @@
 services:
-  # The API owns the SQLite file; the named volume survives container recreation.
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sdxboard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
   backend:
     build: ./backend
     ports:
       - "8080:8080"
     environment:
-      DB_PATH: /data/app.db
+      DATABASE_URL: postgres://postgres:postgres@db:5432/sdxboard?sslmode=disable
       CORS_ORIGIN: http://localhost:3000
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-}
       AI_MODEL: ${AI_MODEL:-}
-    volumes:
-      - canvas-data:/data
+    depends_on:
+      - db
 
-  # Next.js serves the UI and proxies /api requests to the backend service network name.
   frontend:
     build:
       context: ./frontend
@@ -27,5 +36,4 @@ services:
       - backend
 
 volumes:
-  # Docker manages this volume separately from containers, preserving app.db.
-  canvas-data:
+  pgdata:

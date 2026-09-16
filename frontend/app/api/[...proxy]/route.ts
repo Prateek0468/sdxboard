@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND = process.env.API_PROXY_TARGET || "http://backend:8080";
+const BACKEND = process.env.API_PROXY_TARGET || "http://localhost:8080";
 
 async function proxyRequest(req: NextRequest, path: string) {
   const url = new URL(req.url);

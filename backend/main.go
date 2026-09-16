@@ -6,15 +6,15 @@ import (
 	"os"
 
 	"system-design-canvas/backend/agent"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./data/app.db"
-	}
+	godotenv.Load()
+	godotenv.Load(".env.local")
 
-	db, err := openDatabase(dbPath)
+	db, err := openDatabase()
 	if err != nil {
 		log.Fatal(err)
 	}

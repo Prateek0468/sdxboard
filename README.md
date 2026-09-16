@@ -1,6 +1,6 @@
 # System Design Canvas
 
-A full-stack canvas for drawing system-design diagrams with an AI agent. Components and connections are stored in SQLite. The agent can create, modify, and review architectures via natural language.
+A full-stack canvas for drawing system-design diagrams with an AI agent. Components and connections are stored in PostgreSQL. The agent can create, modify, and review architectures via natural language.
 
 ## Run with Docker
 
@@ -14,19 +14,43 @@ Open [http://localhost:3000](http://localhost:3000). The API is also exposed at 
 Useful commands:
 
 ```bash
-make down       # stop containers; keeps the SQLite named volume
+make down       # stop containers; keeps the Postgres volume
 make logs       # follow logs from both services
 make rebuild    # rebuild images without the Docker build cache
 ```
 
 ## Run without Docker
 
-Use two terminals. You need Go 1.22+ and Node.js 20+.
+You need Go 1.22+, Node.js 20+, and a running PostgreSQL instance.
+
+**1. Set up the database**
+
+Create a database (or use an existing one):
+
+```bash
+createdb sdxboard
+```
+
+**2. Configure environment**
+
+Copy the example env file and fill in your values:
 
 ```bash
 cd backend
-DB_PATH=./data/app.db go run .
+cp .env.example .env
+# edit .env with your DATABASE_URL and OPENROUTER_API_KEY
 ```
+
+**3. Start the backend**
+
+```bash
+cd backend
+go run .
+```
+
+The backend reads `.env` and `.env.local` automatically via [godotenv](https://github.com/joho/godotenv).
+
+**4. Start the frontend**
 
 ```bash
 cd frontend
@@ -36,43 +60,36 @@ NEXT_PUBLIC_API_URL=http://localhost:3000 npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/sdxboard?sslmode=disable` | PostgreSQL connection string |
+| `CORS_ORIGIN` | `http://localhost:3000` | Allowed CORS origin |
+| `OPENROUTER_API_KEY` | _(none)_ | Your OpenRouter API key (required for agent) |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai` | API base URL |
+| `AI_MODEL` | `openrouter/free` | Model slug. `openrouter/free` auto-selects a free model |
+
 ## AI Agent Setup
 
 The agent uses [OpenRouter](https://openrouter.ai) to access free AI models. No local model installation required.
 
 1. Get a free API key at [openrouter.ai/keys](https://openrouter.ai/keys)
-2. Set the environment variable:
+2. Add it to your `.env` file:
 
-```bash
-export OPENROUTER_API_KEY=your-key-here
 ```
-
-Optional overrides:
-
-| Variable | Default | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | _(none)_ | Required. Your OpenRouter API key. |
-| `OPENROUTER_BASE_URL` | `https://openrouter.ai` | API base URL. |
-| `AI_MODEL` | `openrouter/free` | Model slug. `openrouter/free` auto-selects a free model. |
-
-When using Docker, the key is passed through from your host environment:
-
-```bash
-OPENROUTER_API_KEY=your-key docker compose up --build
+OPENROUTER_API_KEY=sk-or-v1-xxxxx
 ```
 
 Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works as a diagram-only tool.
 
 ## What Docker Is Doing
 
-- `backend/Dockerfile` first uses a Go builder image, which contains the compiler and CGO tools needed by `go-sqlite3`.
-- Its second stage starts from Alpine and copies in only the compiled server binary, making the final backend image smaller.
-- `frontend/Dockerfile` first installs Node packages and runs `next build`.
-- Its final stage copies Next's standalone server and static assets, without development dependencies or source files.
-- `docker-compose.yml` builds both images, publishes ports 3000 and 8080 to your machine, and gives the services a shared private Docker network.
-- On that private network, Compose creates DNS entries from service names, so `frontend` can reach `http://backend:8080`.
-- Your browser is outside that network, so it cannot resolve `backend`; the Next server proxies browser requests from `/api/*` to the backend service.
-- The `canvas-data` named volume is mounted at `/data` in the backend, so SQLite data persists when containers are stopped and started again.
+- `docker-compose.yml` runs three services: PostgreSQL (`db`), Go backend, and Next.js frontend.
+- PostgreSQL stores data in a named volume (`pgdata`) that persists across container restarts.
+- The backend connects to Postgres via the `db` service hostname on Docker's private network.
+- The frontend proxies browser API requests to the backend via Next.js rewrites.
+- Your browser can't resolve `backend` directly, so the Next server acts as a proxy.
 
 ## API
 
@@ -90,7 +107,7 @@ Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works a
 
 ### Phase 0 — Scaffold
 
-- [x] Go backend running with SQLite, CRUD endpoints for components/edges
+- [x] Go backend running with PostgreSQL, CRUD endpoints for components/edges
 - [x] Next.js frontend with reactflow rendering an empty canvas
 - [x] Drag palette item onto canvas → creates component (persisted)
 - [x] Connect two nodes → creates edge (persisted)
@@ -190,7 +207,7 @@ Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works a
 
 ### Phase 10 — Agent Memory
 
-- [ ] Local vector store (Chroma or SQLite+FAISS)
+- [ ] Local vector store (Chroma or pgvector)
 - [ ] Store past decisions, preferences, interview sessions as embeddings
 - [ ] Retrieval step in agent loop (pull relevant memory into context)
 - [ ] Test: agent references a decision/preference from an earlier session
