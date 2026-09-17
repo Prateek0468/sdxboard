@@ -10,11 +10,17 @@ import ReactFlow, {
   OnConnect,
   ReactFlowInstance,
 } from "reactflow";
-import { useGraphStore, useHistoryStore, ComponentType } from "../lib/store";
+import {
+  useGraphStore,
+  useHistoryStore,
+  useToolStore,
+  ComponentType,
+} from "../lib/store";
 import SystemNode from "./SystemNode";
+import TextNode from "./TextNode";
 import DeletableEdge from "./DeletableEdge";
 
-const nodeTypes = { system: SystemNode };
+const nodeTypes = { system: SystemNode, text: TextNode };
 const edgeTypes = { default: DeletableEdge };
 
 interface CanvasProps {
@@ -26,6 +32,9 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
   const flowRef = useRef<ReactFlowInstance>();
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [selectedCount, setSelectedCount] = useState(0);
+  const toolMode = useToolStore((s) => s.mode);
+  const setToolMode = useToolStore((s) => s.setMode);
+  const textNodes = useGraphStore((s) => s.textNodes);
   const {
     nodes,
     edges,
@@ -34,20 +43,23 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
     updatePosition,
     removeNodes,
     removeEdges,
+    addTextNode,
   } = useGraphStore();
+
+  const allNodes = [...nodes, ...textNodes];
 
   // Undo/redo
   const handleUndo = useCallback(() => {
-    const snapshot = useHistoryStore.getState().undo();
-    if (snapshot) {
-      useGraphStore.setState({ nodes: snapshot.nodes, edges: snapshot.edges });
+    const snap = useHistoryStore.getState().undo();
+    if (snap) {
+      useGraphStore.setState({ nodes: snap.nodes, edges: snap.edges });
     }
   }, []);
 
   const handleRedo = useCallback(() => {
-    const snapshot = useHistoryStore.getState().redo();
-    if (snapshot) {
-      useGraphStore.setState({ nodes: snapshot.nodes, edges: snapshot.edges });
+    const snap = useHistoryStore.getState().redo();
+    if (snap) {
+      useGraphStore.setState({ nodes: snap.nodes, edges: snap.edges });
     }
   }, []);
 
@@ -67,12 +79,20 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         e.preventDefault();
         handleRedo();
       }
+      if (e.key === "v" && !isMod && !e.altKey) {
+        setToolMode("pointer");
+      }
+      if (e.key === "t" && !isMod && !e.altKey) {
+        setToolMode("text");
+      }
+      if (e.key === "Escape") {
+        setToolMode("pointer");
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, setToolMode]);
 
-  // Track selection count
   const onSelectionChange = useCallback(
     ({ nodes: selected }: { nodes: Node[] }) => {
       setSelectedCount(selected.filter((n) => n.selected).length);
@@ -80,7 +100,6 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
     [],
   );
 
-  // Batch delete selected nodes
   const onNodesDelete = useCallback(
     (deleted: Node[]) => removeNodes(deleted.map((node) => node.id)),
     [removeNodes],
@@ -127,6 +146,20 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
     [connect],
   );
 
+  // Canvas click — create text node when text tool is active
+  const onPaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (toolMode !== "text" || !flowRef.current) return;
+      const position = flowRef.current.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      addTextNode(position);
+      setToolMode("pointer");
+    },
+    [toolMode, addTextNode, setToolMode],
+  );
+
   const canUndo = useHistoryStore((s) => s.past.length > 0);
   const canRedo = useHistoryStore((s) => s.future.length > 0);
 
@@ -139,12 +172,57 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         event.dataTransfer.dropEffect = "move";
       }}
     >
+      {/* Toolbar */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg shadow-sm px-1 py-0.5">
+        <button
+          onClick={() => setToolMode("pointer")}
+          title="Select (V)"
+          className={`w-8 h-8 rounded-md text-sm flex items-center justify-center cursor-pointer transition-colors ${
+            toolMode === "pointer"
+              ? "bg-slate-200 text-slate-900"
+              : "text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          ↖
+        </button>
+        <button
+          onClick={() => setToolMode("text")}
+          title="Text (T)"
+          className={`w-8 h-8 rounded-md text-sm font-medium flex items-center justify-center cursor-pointer transition-colors ${
+            toolMode === "text"
+              ? "bg-slate-200 text-slate-900"
+              : "text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          T
+        </button>
+
+        <div className="w-px h-5 bg-slate-200 mx-1" />
+
+        <button
+          onClick={handleUndo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+          className="w-8 h-8 rounded-md text-sm flex items-center justify-center cursor-pointer text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          ↶
+        </button>
+        <button
+          onClick={handleRedo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Shift+Z)"
+          className="w-8 h-8 rounded-md text-sm flex items-center justify-center cursor-pointer text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          ↷
+        </button>
+      </div>
+
       <ReactFlow
-        nodes={nodes}
+        nodes={allNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        defaultEdgeOptions={{ type: "default", markerEnd: "arrow" }}
+        defaultEdgeOptions={{ type: "default" }}
         onInit={(instance) => {
           flowRef.current = instance;
         }}
@@ -153,6 +231,7 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         onNodesDelete={onNodesDelete}
         onEdgesDelete={onEdgesDelete}
         onSelectionChange={onSelectionChange}
+        onPaneClick={onPaneClick}
         selectionOnDrag
         panOnScroll
         multiSelectionKeyCode="Meta"
@@ -161,53 +240,7 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
       >
         <Background gap={20} size={1} />
         <Controls />
-        <svg style={{ position: "absolute", width: 0, height: 0 }}>
-          <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 12 12"
-              refX="11"
-              refY="6"
-              markerWidth="8"
-              markerHeight="8"
-              orient="auto"
-            >
-              <path d="M 0 1 L 10 6 L 0 11 z" fill="#94a3b8" />
-            </marker>
-            <marker
-              id="arrow-reverse"
-              viewBox="0 0 12 12"
-              refX="1"
-              refY="6"
-              markerWidth="8"
-              markerHeight="8"
-              orient="auto"
-            >
-              <path d="M 12 1 L 2 6 L 12 11 z" fill="#94a3b8" />
-            </marker>
-          </defs>
-        </svg>
       </ReactFlow>
-
-      {/* Undo / Redo buttons */}
-      <div className="absolute top-3 left-3 z-10 flex gap-1">
-        <button
-          onClick={handleUndo}
-          disabled={!canUndo}
-          className="w-8 h-8 border border-slate-300 rounded-md bg-white cursor-pointer text-sm flex items-center justify-center shadow-sm hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Undo (Ctrl+Z)"
-        >
-          ↶
-        </button>
-        <button
-          onClick={handleRedo}
-          disabled={!canRedo}
-          className="w-8 h-8 border border-slate-300 rounded-md bg-white cursor-pointer text-sm flex items-center justify-center shadow-sm hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Redo (Ctrl+Shift+Z)"
-        >
-          ↷
-        </button>
-      </div>
 
       {/* Selection info bar */}
       {selectedCount > 0 && (
