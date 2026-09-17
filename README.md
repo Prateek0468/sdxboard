@@ -149,8 +149,8 @@ Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works a
 
 ### Phase 3 — Canvas Polish
 
-- [ ] Undo/redo
-- [ ] Multi-select
+- [x] Undo/redo
+- [x] Multi-select
 - [ ] Copy/paste
 - [ ] Grouping
 - [ ] Save/load named diagrams (not just one live graph)

@@ -1,6 +1,62 @@
 import { create } from "zustand";
 import { Edge, Node, Position, addEdge } from "reactflow";
 
+// --- History store (undo/redo) ---
+
+type Snapshot = { nodes: Node[]; edges: Edge[] };
+
+const MAX_HISTORY = 50;
+
+export const useHistoryStore = create<{
+  past: Snapshot[];
+  future: Snapshot[];
+  record: (snapshot: Snapshot) => void;
+  undo: () => Snapshot | null;
+  redo: () => Snapshot | null;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  clear: () => void;
+}>((set, get) => ({
+  past: [],
+  future: [],
+  record: (snapshot) =>
+    set((s) => ({
+      past: [...s.past.slice(-MAX_HISTORY + 1), snapshot],
+      future: [],
+    })),
+  undo: () => {
+    const { past, future } = get();
+    if (past.length === 0) return null;
+    const prev = past[past.length - 1];
+    const current = useGraphStore.getState();
+    set({
+      past: past.slice(0, -1),
+      future: [{ nodes: current.nodes, edges: current.edges }, ...future],
+    });
+    return prev;
+  },
+  redo: () => {
+    const { past, future } = get();
+    if (future.length === 0) return null;
+    const next = future[0];
+    const current = useGraphStore.getState();
+    set({
+      past: [...past, { nodes: current.nodes, edges: current.edges }],
+      future: future.slice(1),
+    });
+    return next;
+  },
+  canUndo: () => get().past.length > 0,
+  canRedo: () => get().future.length > 0,
+  clear: () => set({ past: [], future: [] }),
+}));
+
+// Helper: record current graph state before a mutation
+function snapshot() {
+  const { nodes, edges } = useGraphStore.getState();
+  useHistoryStore.getState().record({ nodes, edges });
+}
+
 export const componentTypes = [
   { type: "client", label: "Client", color: "#3b82f6", category: "client" },
   { type: "dns", label: "DNS", color: "#8b5cf6", category: "network" },
@@ -56,12 +112,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const useGraphStore = create<GraphStore>((set, get) => ({
   nodes: [], edges: [],
-  load: async () => { const graph = await request<{ components: ApiComponent[]; edges: ApiEdge[] }>("/architecture"); set({ nodes: graph.components.map(asNode), edges: graph.edges.map(asEdge) }); },
-  addComponent: async (type, position) => { const { label } = typeInfo(type); const component = await request<ApiComponent>("/components", { method: "POST", body: JSON.stringify({ type, label, x: position.x, y: position.y }) }); set((state) => ({ nodes: [...state.nodes, asNode(component)] })); },
-  connect: async (sourceId, targetId) => { const edge = await request<ApiEdge>("/edges", { method: "POST", body: JSON.stringify({ sourceId, targetId }) }); set((state) => ({ edges: addEdge(asEdge(edge), state.edges) })); },
-  updatePosition: async (id, position) => { const node = get().nodes.find((item) => item.id === id); if (!node) return; set((state) => ({ nodes: state.nodes.map((item) => item.id === id ? { ...item, position } : item) })); await request(`/components/${id}`, { method: "PUT", body: JSON.stringify({ label: String(node.data.label), x: position.x, y: position.y, metadata: null }) }); },
-  removeNodes: async (ids) => { set((state) => ({ nodes: state.nodes.filter((node) => !ids.includes(node.id)), edges: state.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); await Promise.all(ids.map((id) => request(`/components/${id}`, { method: "DELETE" }))); },
-  removeEdges: async (ids) => { set((state) => ({ edges: state.edges.filter((edge) => !ids.includes(edge.id)) })); await Promise.all(ids.map((id) => request(`/edges/${id}`, { method: "DELETE" }))); },
+  load: async () => { const graph = await request<{ components: ApiComponent[]; edges: ApiEdge[] }>("/architecture"); set({ nodes: graph.components.map(asNode), edges: graph.edges.map(asEdge) }); useHistoryStore.getState().clear(); },
+  addComponent: async (type, position) => { snapshot(); const { label } = typeInfo(type); const component = await request<ApiComponent>("/components", { method: "POST", body: JSON.stringify({ type, label, x: position.x, y: position.y }) }); set((state) => ({ nodes: [...state.nodes, asNode(component)] })); },
+  connect: async (sourceId, targetId) => { snapshot(); const edge = await request<ApiEdge>("/edges", { method: "POST", body: JSON.stringify({ sourceId, targetId }) }); set((state) => ({ edges: addEdge(asEdge(edge), state.edges) })); },
+  updatePosition: async (id, position) => { snapshot(); const node = get().nodes.find((item) => item.id === id); if (!node) return; set((state) => ({ nodes: state.nodes.map((item) => item.id === id ? { ...item, position } : item) })); await request(`/components/${id}`, { method: "PUT", body: JSON.stringify({ label: String(node.data.label), x: position.x, y: position.y, metadata: null }) }); },
+  removeNodes: async (ids) => { snapshot(); set((state) => ({ nodes: state.nodes.filter((node) => !ids.includes(node.id)), edges: state.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); await Promise.all(ids.map((id) => request(`/components/${id}`, { method: "DELETE" }))); },
+  removeEdges: async (ids) => { snapshot(); set((state) => ({ edges: state.edges.filter((edge) => !ids.includes(edge.id)) })); await Promise.all(ids.map((id) => request(`/edges/${id}`, { method: "DELETE" }))); },
 }));
 
 // --- Selection store ---
