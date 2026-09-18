@@ -18,7 +18,7 @@ export default function CanvasPage() {
   }, [load]);
 
   return (
-    <main className="flex h-screen text-slate-900">
+    <main className="flex h-screen text-slate-900 bg-slate-50/50">
       <Palette />
       <Canvas chatOpen={chatOpen} onToggleChat={() => setChatOpen((p) => !p)} />
       {chatOpen && <ChatPanel />}

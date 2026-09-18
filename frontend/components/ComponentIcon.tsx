@@ -4,14 +4,16 @@ interface ComponentIconProps {
   type: ComponentType;
   size?: number;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export default function ComponentIcon({
   type,
   size = 20,
   className,
+  style,
 }: ComponentIconProps) {
-  const s = { width: size, height: size };
+  const s = { width: size, height: size, ...style };
 
   switch (type) {
     case "client":

@@ -8,10 +8,36 @@ html,
 body {
   height: 100%;
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .react-flow__node.selected {
-  box-shadow: 0 0 0 2px #172033;
+  box-shadow: 0 0 0 2px #3b82f6;
+  border-radius: 12px;
+}
+
+.react-flow__node {
+  transition: box-shadow 0.15s ease;
+}
+
+.react-flow__controls {
+  border-radius: 10px !important;
+  border: 1px solid rgba(226, 232, 240, 0.6) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  overflow: hidden;
+}
+
+.react-flow__controls button {
+  border: none !important;
+}
+
+.react-flow__controls button:hover {
+  background-color: #f8fafc !important;
+}
+
+.react-flow__background {
+  background-color: #fafbfc !important;
 }
 
 @keyframes spin {

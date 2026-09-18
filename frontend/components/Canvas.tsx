@@ -11,6 +11,7 @@ import ReactFlow, {
   ReactFlowInstance,
   Viewport,
 } from "reactflow";
+import { MousePointer2, Type, MoveRight, Undo2, Redo2, MessageCircle, X } from "lucide-react";
 import {
   useGraphStore,
   useHistoryStore,
@@ -140,33 +141,39 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
 
   const isArrowMode = toolMode === "arrow";
 
+  const toolBtn = (mode: string, icon: React.ReactNode, label: string, shortcut: string) => (
+    <button
+      onClick={() => setToolMode(mode as any)}
+      title={`${label} (${shortcut})`}
+      className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-150 ${
+        toolMode === mode
+          ? "bg-slate-900 text-white shadow-sm"
+          : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+      }`}
+    >
+      {icon}
+    </button>
+  );
+
   return (
     <section
-      className="min-w-0 flex-1 relative"
+      className="min-w-0 flex-1 relative bg-slate-50/30"
       onDrop={onDrop}
       onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
     >
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg shadow-sm px-1 py-0.5">
-        <button onClick={() => setToolMode("pointer")} title="Select (V)"
-          className={`w-8 h-8 rounded-md text-sm flex items-center justify-center cursor-pointer transition-colors ${toolMode === "pointer" ? "bg-slate-200 text-slate-900" : "text-slate-600 hover:bg-slate-100"}`}>
-          ↖
-        </button>
-        <button onClick={() => setToolMode("text")} title="Text (T)"
-          className={`w-8 h-8 rounded-md text-sm font-medium flex items-center justify-center cursor-pointer transition-colors ${toolMode === "text" ? "bg-slate-200 text-slate-900" : "text-slate-600 hover:bg-slate-100"}`}>
-          T
-        </button>
-        <button onClick={() => setToolMode("arrow")} title="Arrow (A)"
-          className={`w-8 h-8 rounded-md text-sm flex items-center justify-center cursor-pointer transition-colors ${toolMode === "arrow" ? "bg-slate-200 text-slate-900" : "text-slate-600 hover:bg-slate-100"}`}>
-          →
-        </button>
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+      {/* Toolbar */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-white/90 backdrop-blur-md border border-slate-200/60 rounded-xl shadow-lg shadow-slate-900/5 px-2 py-1.5">
+        {toolBtn("pointer", <MousePointer2 size={15} />, "Select", "V")}
+        {toolBtn("text", <Type size={15} />, "Text", "T")}
+        {toolBtn("arrow", <MoveRight size={15} />, "Arrow", "A")}
+        <div className="w-px h-5 bg-slate-200/60 mx-1" />
         <button onClick={handleUndo} disabled={!canUndo} title="Undo (Ctrl+Z)"
-          className="w-8 h-8 rounded-md text-sm flex items-center justify-center cursor-pointer text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
-          ↶
+          className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150">
+          <Undo2 size={15} />
         </button>
         <button onClick={handleRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)"
-          className="w-8 h-8 rounded-md text-sm flex items-center justify-center cursor-pointer text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
-          ↷
+          className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150">
+          <Redo2 size={15} />
         </button>
       </div>
 
@@ -193,25 +200,30 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         deleteKeyCode="Delete"
         fitView
       >
-        <Background gap={20} size={1} />
-        <Controls />
+        <Background gap={20} size={1} color="#e2e8f0" />
+        <Controls showInteractive={false} />
       </ReactFlow>
 
       <ArrowOverlay flowRef={flowRef} viewport={viewport} />
 
+      {/* Selection bar */}
       {selectedCount > 0 && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg flex items-center gap-3">
-          <span>{selectedCount} selected</span>
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-slate-900/90 backdrop-blur-sm text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-3">
+          <span className="font-medium">{selectedCount} selected</span>
           <button onClick={() => { const s = useGraphStore.getState().nodes.filter((n) => n.selected); if (s.length) removeNodes(s.map((n) => n.id)); }}
-            className="text-red-400 hover:text-red-300 underline cursor-pointer">Delete</button>
+            className="text-red-400 hover:text-red-300 text-[12px] font-medium cursor-pointer transition-colors">Delete</button>
           <button onClick={() => { setSelectedCount(0); flowRef.current?.fitView(); }}
-            className="text-slate-300 hover:text-white underline cursor-pointer">Deselect</button>
+            className="text-slate-400 hover:text-white text-[12px] font-medium cursor-pointer transition-colors">Dismiss</button>
         </div>
       )}
 
-      <button className="absolute top-3 right-3 z-10 w-9 h-9 border border-slate-300 rounded-md bg-white cursor-pointer text-base flex items-center justify-center shadow-sm hover:bg-slate-100"
-        onClick={onToggleChat} title={chatOpen ? "Close chat" : "Open chat"}>
-        {chatOpen ? "\u2715" : "\uD83D\uDCAC"}
+      {/* Chat toggle */}
+      <button
+        className="absolute top-3 right-3 z-10 w-9 h-9 rounded-xl bg-white/90 backdrop-blur-md border border-slate-200/60 cursor-pointer flex items-center justify-center shadow-lg shadow-slate-900/5 hover:bg-white transition-all duration-150"
+        onClick={onToggleChat}
+        title={chatOpen ? "Close chat" : "Open chat"}
+      >
+        {chatOpen ? <X size={16} className="text-slate-500" /> : <MessageCircle size={16} className="text-slate-500" />}
       </button>
     </section>
   );
