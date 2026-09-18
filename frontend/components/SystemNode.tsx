@@ -8,6 +8,8 @@ export interface SystemNodeData {
   color: string;
 }
 
+const handleStyle = { width: 1, height: 1, minWidth: 0, minHeight: 0, opacity: 0 };
+
 export default function SystemNode({ id, data }: NodeProps<SystemNodeData>) {
   const { deleteElements } = useReactFlow();
   const selectNode = useSelectionStore((s) => s.selectNode);
@@ -22,7 +24,14 @@ export default function SystemNode({ id, data }: NodeProps<SystemNodeData>) {
       className="group relative flex flex-col items-center gap-1 cursor-pointer"
       onClick={(e) => { e.stopPropagation(); selectNode(id); }}
     >
-      <Handle type="target" position={Position.Left} className="!w-2 !h-2 !bg-slate-400" />
+      <Handle type="target" position={Position.Top} style={handleStyle} />
+      <Handle type="target" position={Position.Left} style={handleStyle} />
+      <Handle type="target" position={Position.Bottom} style={handleStyle} />
+      <Handle type="target" position={Position.Right} style={handleStyle} />
+      <Handle type="source" position={Position.Top} style={handleStyle} />
+      <Handle type="source" position={Position.Left} style={handleStyle} />
+      <Handle type="source" position={Position.Bottom} style={handleStyle} />
+      <Handle type="source" position={Position.Right} style={handleStyle} />
       <ComponentIcon type={data.type} size={32} className="text-slate-700" />
       <span className="text-[11px] text-slate-500 whitespace-nowrap">{data.label}</span>
       <button
@@ -32,7 +41,6 @@ export default function SystemNode({ id, data }: NodeProps<SystemNodeData>) {
       >
         ✕
       </button>
-      <Handle type="source" position={Position.Right} className="!w-2 !h-2 !bg-slate-400" />
     </div>
   );
 }

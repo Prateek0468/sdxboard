@@ -1,11 +1,28 @@
 import {
   BaseEdge,
   EdgeProps,
-  getBezierPath,
   useReactFlow,
 } from "reactflow";
 
-function ArrowHead({
+function wobble(x1: number, y1: number, x2: number, y2: number): string {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const segments = Math.max(3, Math.floor(len / 30));
+
+  let d = `M ${x1} ${y1}`;
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    const mx = x1 + dx * t;
+    const my = y1 + dy * t;
+    const ox = (Math.sin(t * 12 + x1 * 0.1) * 1.2 + Math.cos(t * 7 + y1 * 0.1) * 0.8);
+    const oy = (Math.cos(t * 10 + x1 * 0.1) * 1.0 + Math.sin(t * 9 + y1 * 0.1) * 0.6);
+    d += ` L ${mx + ox} ${my + oy}`;
+  }
+  return d;
+}
+
+function HandArrow({
   x,
   y,
   angle,
@@ -14,8 +31,8 @@ function ArrowHead({
   y: number;
   angle: number;
 }) {
-  const len = 12;
-  const spread = 0.45;
+  const len = 16;
+  const spread = 0.5;
   const x1 = x - len * Math.cos(angle - spread);
   const y1 = y - len * Math.sin(angle - spread);
   const x2 = x - len * Math.cos(angle + spread);
@@ -23,8 +40,8 @@ function ArrowHead({
   return (
     <path
       d={`M ${x1} ${y1} L ${x} ${y} L ${x2} ${y2}`}
-      stroke="#64748b"
-      strokeWidth={1.5}
+      stroke="#1e293b"
+      strokeWidth={2}
       fill="none"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -38,23 +55,15 @@ export default function DeletableEdge({
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   label,
 }: EdgeProps) {
   const { deleteElements } = useReactFlow();
 
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    curvature: 0.25,
-  });
-
+  const midX = (sourceX + targetX) / 2;
+  const midY = (sourceY + targetY) / 2;
   const angle = Math.atan2(targetY - sourceY, targetX - sourceX);
+
+  const edgePath = wobble(sourceX, sourceY, targetX, targetY);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -63,20 +72,19 @@ export default function DeletableEdge({
 
   return (
     <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        style={{
-          stroke: "#94a3b8",
-          strokeWidth: 1.5,
-          strokeLinecap: "round",
-        }}
+      <path
+        d={edgePath}
+        stroke="#1e293b"
+        strokeWidth={2}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <ArrowHead x={targetX} y={targetY} angle={angle} />
+      <HandArrow x={targetX} y={targetY} angle={angle} />
       {label && (
         <foreignObject
-          x={labelX - 50}
-          y={labelY - 10}
+          x={midX - 50}
+          y={midY - 10}
           width={100}
           height={20}
           requiredExtensions="http://www.w3.org/1999/xhtml"
@@ -87,8 +95,8 @@ export default function DeletableEdge({
         </foreignObject>
       )}
       <foreignObject
-        x={labelX - 10}
-        y={labelY - 10}
+        x={midX - 10}
+        y={midY - 10}
         width={20}
         height={20}
         className="edge-delete-btn"

@@ -58,7 +58,7 @@ function snapshot() {
 
 // --- Tool store ---
 
-export type ToolMode = "pointer" | "text";
+export type ToolMode = "pointer" | "text" | "arrow";
 
 export const useToolStore = create<{
   mode: ToolMode;
@@ -66,6 +66,32 @@ export const useToolStore = create<{
 }>((set) => ({
   mode: "pointer",
   setMode: (mode) => set({ mode }),
+}));
+
+// --- Arrow store (independent canvas arrows) ---
+
+export type ArrowData = {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  text?: string;
+};
+
+export const useArrowStore = create<{
+  arrows: ArrowData[];
+  addArrow: (arrow: ArrowData) => void;
+  updateArrow: (id: string, patch: Partial<ArrowData>) => void;
+  removeArrow: (id: string) => void;
+}>((set) => ({
+  arrows: [],
+  addArrow: (arrow) => set((s) => ({ arrows: [...s.arrows, arrow] })),
+  updateArrow: (id, patch) =>
+    set((s) => ({
+      arrows: s.arrows.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    })),
+  removeArrow: (id) => set((s) => ({ arrows: s.arrows.filter((a) => a.id !== id) })),
 }));
 
 // --- Component types ---
