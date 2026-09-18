@@ -88,7 +88,6 @@ export default function ArrowOverlay({ flowRef, viewport }: Props) {
       if (length >= MIN_ARROW_LENGTH) {
         const id = crypto.randomUUID();
         addArrow({ ...draft, id });
-        setSelectedArrow(id);
       }
       setDraft(null);
       setToolMode("pointer");
@@ -119,15 +118,15 @@ export default function ArrowOverlay({ flowRef, viewport }: Props) {
   const renderArrow = (arrow: ArrowData, isDraft = false) => {
     const selected = selectedArrow === arrow.id && !isDraft;
     return <g key={arrow.id}>
-      {!isDraft && <line x1={arrow.x1} y1={arrow.y1} x2={arrow.x2} y2={arrow.y2} stroke="transparent" strokeWidth={16}
+      {!isDraft && <line x1={arrow.x1} y1={arrow.y1} x2={arrow.x2} y2={arrow.y2} stroke="transparent" strokeWidth={10}
         pointerEvents="stroke" style={{ cursor: "move" }} onPointerDown={(event) => beginArrowDrag(event, arrow, "body")} />}
       <line x1={arrow.x1} y1={arrow.y1} x2={arrow.x2} y2={arrow.y2} stroke={isDraft ? "#3b82f6" : "#1e293b"} strokeWidth={2}
         strokeLinecap="round" strokeDasharray={isDraft ? "6 3" : undefined} pointerEvents="none" />
       {!isDraft && <polygon points={arrowHead(arrow)} fill="#1e293b" pointerEvents="none" />}
       {selected && <>
-        <circle cx={arrow.x1} cy={arrow.y1} r={5} fill="white" stroke="#3b82f6" strokeWidth={2} pointerEvents="all"
+        <circle cx={arrow.x1} cy={arrow.y1} r={2.5} fill="white" stroke="#3b82f6" strokeWidth={1.5} pointerEvents="all"
           style={{ cursor: "move" }} onPointerDown={(event) => beginArrowDrag(event, arrow, "start")} />
-        <circle cx={arrow.x2} cy={arrow.y2} r={5} fill="white" stroke="#3b82f6" strokeWidth={2} pointerEvents="all"
+        <circle cx={arrow.x2} cy={arrow.y2} r={2.5} fill="white" stroke="#3b82f6" strokeWidth={1.5} pointerEvents="all"
           style={{ cursor: "move" }} onPointerDown={(event) => beginArrowDrag(event, arrow, "end")} />
       </>}
     </g>;
