@@ -35,7 +35,7 @@ func main() {
 		log.Println("agent disabled (set OPENROUTER_API_KEY to enable)")
 	}
 
-	server := newServer(db, os.Getenv("CORS_ORIGIN"), agentHandler)
+	server := newServer(db, isPostgres, os.Getenv("CORS_ORIGIN"), agentHandler)
 	log.Println("backend listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", server.routes()))
 }

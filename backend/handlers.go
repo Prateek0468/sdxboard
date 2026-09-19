@@ -3,6 +3,8 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -33,15 +35,23 @@ type edge struct {
 
 type server struct {
 	db           *sql.DB
+	isPostgres   bool
 	corsOrigin   string
 	agentHandler *agent.Handler
 }
 
-func newServer(db *sql.DB, corsOrigin string, agentHandler *agent.Handler) *server {
+func newServer(db *sql.DB, isPostgres bool, corsOrigin string, agentHandler *agent.Handler) *server {
 	if corsOrigin == "" {
 		corsOrigin = "http://localhost:3000"
 	}
-	return &server{db: db, corsOrigin: corsOrigin, agentHandler: agentHandler}
+	return &server{db: db, isPostgres: isPostgres, corsOrigin: corsOrigin, agentHandler: agentHandler}
+}
+
+func (s *server) ph(n int) string {
+	if s.isPostgres {
+		return fmt.Sprintf("$%d", n)
+	}
+	return "?"
 }
 
 func (s *server) routes() http.Handler {
@@ -110,14 +120,14 @@ func (s *server) createComponent(w http.ResponseWriter, r *http.Request) {
 		Metadata: input.Metadata,
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO components (id, type, label, x, y, metadata) VALUES (?, ?, ?, ?, ?, ?)`,
+		fmt.Sprintf(`INSERT INTO components (id, type, label, x, y, metadata) VALUES (%s, %s, %s, %s, %s, %s)`, s.ph(1), s.ph(2), s.ph(3), s.ph(4), s.ph(5), s.ph(6)),
 		c.ID, c.Type, c.Label, c.X, c.Y, nullableJSON(c.Metadata),
 	)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	row := s.db.QueryRow(`SELECT id, type, label, x, y, metadata, created_at, updated_at FROM components WHERE id = ?`, c.ID)
+	row := s.db.QueryRow(fmt.Sprintf(`SELECT id, type, label, x, y, metadata, created_at, updated_at FROM components WHERE id = %s`, s.ph(1)), c.ID)
 	if err := scanComponent(row, &c); err != nil {
 		internalError(w, err)
 		return
@@ -136,7 +146,7 @@ func (s *server) updateComponent(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 	result, err := s.db.Exec(
-		`UPDATE components SET label = ?, x = ?, y = ?, metadata = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		fmt.Sprintf(`UPDATE components SET label = %s, x = %s, y = %s, metadata = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s`, s.ph(1), s.ph(2), s.ph(3), s.ph(4), s.ph(5)),
 		input.Label, input.X, input.Y, nullableJSON(input.Metadata), id,
 	)
 	if err != nil {
@@ -149,7 +159,7 @@ func (s *server) updateComponent(w http.ResponseWriter, r *http.Request) {
 	}
 	var c component
 	row := s.db.QueryRow(
-		`SELECT id, type, label, x, y, metadata, created_at, updated_at FROM components WHERE id = ?`,
+		fmt.Sprintf(`SELECT id, type, label, x, y, metadata, created_at, updated_at FROM components WHERE id = %s`, s.ph(1)),
 		id,
 	)
 	if err := scanComponent(row, &c); err != nil {
@@ -160,13 +170,11 @@ func (s *server) updateComponent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) deleteComponent(w http.ResponseWriter, r *http.Request) {
-	result, err := s.db.Exec(`DELETE FROM components WHERE id = ?`, r.PathValue("id"))
+	id := r.PathValue("id")
+	_, err := s.db.Exec(fmt.Sprintf(`DELETE FROM components WHERE id = %s`, s.ph(1)), id)
 	if err != nil {
+		log.Printf("delete component %s: %v", id, err)
 		internalError(w, err)
-		return
-	}
-	if affected, _ := result.RowsAffected(); affected == 0 {
-		writeError(w, http.StatusNotFound, "component not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -191,7 +199,7 @@ func (s *server) createEdge(w http.ResponseWriter, r *http.Request) {
 		Label:    input.Label,
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO edges (id, source_id, target_id, label) VALUES (?, ?, ?, ?)`,
+		fmt.Sprintf(`INSERT INTO edges (id, source_id, target_id, label) VALUES (%s, %s, %s, %s)`, s.ph(1), s.ph(2), s.ph(3), s.ph(4)),
 		e.ID, e.SourceID, e.TargetID, e.Label,
 	)
 	if err != nil {
@@ -199,7 +207,7 @@ func (s *server) createEdge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row := s.db.QueryRow(
-		`SELECT id, source_id, target_id, label, created_at FROM edges WHERE id = ?`,
+		fmt.Sprintf(`SELECT id, source_id, target_id, label, created_at FROM edges WHERE id = %s`, s.ph(1)),
 		e.ID,
 	)
 	if err := scanEdge(row, &e); err != nil {
@@ -210,13 +218,11 @@ func (s *server) createEdge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) deleteEdge(w http.ResponseWriter, r *http.Request) {
-	result, err := s.db.Exec(`DELETE FROM edges WHERE id = ?`, r.PathValue("id"))
+	id := r.PathValue("id")
+	_, err := s.db.Exec(fmt.Sprintf(`DELETE FROM edges WHERE id = %s`, s.ph(1)), id)
 	if err != nil {
+		log.Printf("delete edge %s: %v", id, err)
 		internalError(w, err)
-		return
-	}
-	if affected, _ := result.RowsAffected(); affected == 0 {
-		writeError(w, http.StatusNotFound, "edge not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -304,6 +310,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func internalError(w http.ResponseWriter, err error) {
+	log.Printf("internal error: %v", err)
 	writeError(w, http.StatusInternalServerError, "internal server error")
 }
 

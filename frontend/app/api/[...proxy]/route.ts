@@ -25,7 +25,6 @@ async function proxyRequest(req: NextRequest, path: string) {
   }
 
   const res = await fetch(target, init);
-  const body = await res.arrayBuffer();
 
   const responseHeaders = new Headers();
   res.headers.forEach((value, key) => {
@@ -34,6 +33,11 @@ async function proxyRequest(req: NextRequest, path: string) {
     }
   });
 
+  if (res.status === 204) {
+    return new NextResponse(null, { status: 204, headers: responseHeaders });
+  }
+
+  const body = await res.arrayBuffer();
   return new NextResponse(body, { status: res.status, headers: responseHeaders });
 }
 
