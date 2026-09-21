@@ -124,18 +124,22 @@ export default function ArrowOverlay({ flowRef, viewport }: Props) {
         strokeLinecap="round" strokeDasharray={isDraft ? "6 3" : undefined} pointerEvents="none" />
       {!isDraft && <polygon points={arrowHead(arrow)} fill="#1e293b" pointerEvents="none" />}
       {selected && <>
-        <circle cx={arrow.x1} cy={arrow.y1} r={2.5} fill="white" stroke="#3b82f6" strokeWidth={1.5} pointerEvents="all"
+        <circle cx={arrow.x1} cy={arrow.y1} r={3.5} fill="white" stroke="#3b82f6" strokeWidth={1.5} pointerEvents="all"
           style={{ cursor: "move" }} onPointerDown={(event) => beginArrowDrag(event, arrow, "start")} />
-        <circle cx={arrow.x2} cy={arrow.y2} r={2.5} fill="white" stroke="#3b82f6" strokeWidth={1.5} pointerEvents="all"
+        <circle cx={arrow.x2} cy={arrow.y2} r={3.5} fill="white" stroke="#3b82f6" strokeWidth={1.5} pointerEvents="all"
           style={{ cursor: "move" }} onPointerDown={(event) => beginArrowDrag(event, arrow, "end")} />
+        <g style={{ cursor: "pointer" }} onClick={(event) => { event.stopPropagation(); removeArrow(arrow.id); setSelectedArrow(null); }}>
+          <circle cx={(arrow.x1 + arrow.x2) / 2 + 14} cy={(arrow.y1 + arrow.y2) / 2 - 10} r={8} fill="white" stroke="#e2e8f0" strokeWidth={1} />
+          <text x={(arrow.x1 + arrow.x2) / 2 + 14} y={(arrow.y1 + arrow.y2) / 2 - 6.5} textAnchor="middle" fill="#94a3b8" fontSize={11} pointerEvents="none">✕</text>
+        </g>
       </>}
     </g>;
   };
 
-  return <svg className="absolute inset-0 h-full w-full" style={{ zIndex: 5, pointerEvents: toolMode === "arrow" ? "auto" : "none", overflow: "hidden" }}
+  return <svg className="absolute inset-0 h-full w-full" style={{ zIndex: 5, overflow: "hidden", pointerEvents: toolMode === "arrow" ? "auto" : "none" }}
     onPointerDown={startArrow} onPointerMove={movePointer} onPointerUp={finishPointer} onPointerCancel={finishPointer}>
     <g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`}>
-      {arrows.map((arrow) => renderArrow(arrow))}
+      {arrows.map((arrow) => <g key={arrow.id} style={{ pointerEvents: "auto" }}>{renderArrow(arrow)}</g>)}
       {draft && renderArrow(draft, true)}
     </g>
   </svg>;
