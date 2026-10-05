@@ -152,6 +152,7 @@ type GraphStore = {
   addTextNode: (position: { x: number; y: number }) => string;
   updateTextNode: (id: string, label: string) => void;
   removeTextNode: (id: string) => void;
+  clearAll: () => Promise<void>;
 };
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -168,6 +169,12 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   updatePosition: async (id, position) => { snapshot(); const node = get().nodes.find((item) => item.id === id); if (!node) return; set((state) => ({ nodes: state.nodes.map((item) => item.id === id ? { ...item, position } : item) })); await request(`/components/${id}`, { method: "PUT", body: JSON.stringify({ label: String(node.data.label), x: position.x, y: position.y, metadata: null }) }); },
   removeNodes: async (ids) => { snapshot(); const textIds = get().textNodes.map((n) => n.id); const dbIds = ids.filter((id) => !textIds.includes(id) && !id.startsWith("text-")); set((state) => ({ nodes: state.nodes.filter((node) => !ids.includes(node.id)), edges: state.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); if (dbIds.length) await Promise.all(dbIds.map((id) => request(`/components/${id}`, { method: "DELETE" }))); },
   removeEdges: async (ids) => { snapshot(); set((state) => ({ edges: state.edges.filter((edge) => !ids.includes(edge.id)) })); await Promise.all(ids.map((id) => request(`/edges/${id}`, { method: "DELETE" }))); },
+  clearAll: async () => {
+    snapshot();
+    const dbNodeIds = get().nodes.map((n) => n.id);
+    set({ nodes: [], edges: [], textNodes: [] });
+    await Promise.all(dbNodeIds.map((id) => request(`/components/${id}`, { method: "DELETE" })));
+  },
   addTextNode: (position) => {
     const id = `text-${Date.now()}`;
     const node: Node = { id, type: "text", position, draggable: true, data: { label: "" } };

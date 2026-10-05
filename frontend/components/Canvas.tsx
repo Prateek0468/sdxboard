@@ -11,7 +11,7 @@ import ReactFlow, {
   ReactFlowInstance,
   Viewport,
 } from "reactflow";
-import { MousePointer2, Type, MoveRight, Undo2, Redo2, MessageCircle, X } from "lucide-react";
+import { MousePointer2, Type, MoveRight, Undo2, Redo2, Trash2, MessageCircle, X } from "lucide-react";
 import {
   useGraphStore,
   useHistoryStore,
@@ -23,6 +23,7 @@ import SystemNode from "./SystemNode";
 import TextNode from "./TextNode";
 import DeletableEdge from "./DeletableEdge";
 import ArrowOverlay from "./ArrowOverlay";
+import ConfirmModal from "./ConfirmModal";
 
 const nodeTypes = { system: SystemNode, text: TextNode };
 const edgeTypes = { default: DeletableEdge };
@@ -138,6 +139,9 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
 
   const canUndo = useHistoryStore((s) => s.past.length > 0);
   const canRedo = useHistoryStore((s) => s.future.length > 0);
+  const clearAll = useGraphStore((s) => s.clearAll);
+  const hasContent = nodes.length > 0 || textNodes.length > 0;
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const isArrowMode = toolMode === "arrow";
 
@@ -166,6 +170,15 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         {toolBtn("pointer", <MousePointer2 size={15} />, "Select", "V")}
         {toolBtn("text", <Type size={15} />, "Text", "T")}
         {toolBtn("arrow", <MoveRight size={15} />, "Arrow", "A")}
+        <div className="w-px h-5 bg-slate-200/60 mx-1" />
+        <button
+          onClick={() => setConfirmOpen(true)}
+          disabled={!hasContent}
+          title="Delete all"
+          className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150"
+        >
+          <Trash2 size={15} />
+        </button>
         <div className="w-px h-5 bg-slate-200/60 mx-1" />
         <button onClick={handleUndo} disabled={!canUndo} title="Undo (Ctrl+Z)"
           className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150">
@@ -208,6 +221,14 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
       </ReactFlow>
 
       <ArrowOverlay flowRef={flowRef} viewport={viewport} />
+
+      <ConfirmModal
+        open={confirmOpen}
+        title="Delete all?"
+        message="This will remove all components, arrows, and text from the canvas."
+        onConfirm={() => { clearAll(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
 
       {/* Selection bar */}
       {selectedCount > 0 && (
