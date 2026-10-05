@@ -3,7 +3,9 @@ package agent
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -60,7 +62,7 @@ func Definitions() []ToolDef {
 			Type: "function",
 			Function: ToolDefFunc{
 				Name:        "create_component",
-				Description: "Creates a new component. Types: client, dns, load-balancer, api-gateway, api-server, database, cache, queue, cdn, worker, object-storage, message-broker, search-engine, vector-db, ml-service, monitoring, serverless, cdn-edge.",
+				Description: "Creates a new component when no component with this label already exists. Use a distinct label for intentional replicas. Types: client, dns, load-balancer, api-gateway, api-server, database, cache, queue, cdn, worker, object-storage, message-broker, search-engine, vector-db, ml-service, monitoring, serverless, cdn-edge.",
 				Parameters: json.RawMessage(`{
 					"type":"object",
 					"properties":{
@@ -78,7 +80,7 @@ func Definitions() []ToolDef {
 			Type: "function",
 			Function: ToolDefFunc{
 				Name:        "connect_components",
-				Description: "Creates a connection between two components. Arrows show flow direction from source to target.",
+				Description: "Creates a connection between two components, using a component label or UUID for each endpoint. Existing identical connections are reused. Arrows show flow direction from source to target.",
 				Parameters: json.RawMessage(`{
 					"type":"object",
 					"properties":{
@@ -183,6 +185,17 @@ func ExecuteTool(db *DB, name string, arguments json.RawMessage, callID string) 
 			result.Content = fmt.Sprintf("Error parsing arguments: %v", err)
 			return result
 		}
+		existing, found, err := findComponentByLabel(db, args.Label)
+		if err != nil {
+			result.Content = fmt.Sprintf("Error finding component: %v", err)
+			return result
+		}
+		if found {
+			result.Content = fmt.Sprintf("Component '%s' already exists with id %s; reused existing component", existing.Label, existing.ID)
+			result.Data = existing
+			return result
+		}
+
 		id, err := createComponent(db, args.Type, args.Label, args.X, args.Y, args.Metadata)
 		if err != nil {
 			result.Content = fmt.Sprintf("Error creating component: %v", err)
@@ -200,11 +213,32 @@ func ExecuteTool(db *DB, name string, arguments json.RawMessage, callID string) 
 			result.Content = fmt.Sprintf("Error parsing arguments: %v", err)
 			return result
 		}
-		id, err := createEdge(db, args.SourceID, args.TargetID, args.Label)
+		srcID, err := resolveComponentID(db, args.SourceID)
+		if err != nil {
+			result.Content = fmt.Sprintf("Source component not found: '%s'. Use inspect_architecture to see available components.", args.SourceID)
+			return result
+		}
+		tgtID, err := resolveComponentID(db, args.TargetID)
+		if err != nil {
+			result.Content = fmt.Sprintf("Target component not found: '%s'. Use inspect_architecture to see available components.", args.TargetID)
+			return result
+		}
+		log.Printf("connect_components: resolved '%s' -> %s, '%s' -> %s", args.SourceID, srcID, args.TargetID, tgtID)
+		existingID, found, err := findEdge(db, srcID, tgtID)
+		if err != nil {
+			result.Content = fmt.Sprintf("Error finding connection: %v", err)
+			return result
+		}
+		if found {
+			result.Content = fmt.Sprintf("Connection '%s' -> '%s' already exists with edge id %s", args.SourceID, args.TargetID, existingID)
+			return result
+		}
+
+		id, err := createEdge(db, srcID, tgtID, args.Label)
 		if err != nil {
 			result.Content = fmt.Sprintf("Error creating edge: %v", err)
 		} else {
-			result.Content = fmt.Sprintf("Connected components with edge id %s", id)
+			result.Content = fmt.Sprintf("Connected '%s' -> '%s' with edge id %s", args.SourceID, args.TargetID, id)
 		}
 
 	case "update_component":
@@ -333,6 +367,73 @@ func inspectArchitecture(db *DB) (architectureData, error) {
 	}
 
 	return data, edges.Err()
+}
+
+// resolveComponentID takes a string that could be a UUID or a label and returns the component ID.
+func resolveComponentID(db *DB, input string) (string, error) {
+	// If it looks like a UUID, try it directly
+	if len(input) == 36 && strings.Count(input, "-") == 4 {
+		var exists bool
+		if db.isPostgres {
+			db.QueryRow(`SELECT EXISTS(SELECT 1 FROM components WHERE id = $1)`, input).Scan(&exists)
+		} else {
+			db.QueryRow(`SELECT EXISTS(SELECT 1 FROM components WHERE id = ?)`, input).Scan(&exists)
+		}
+		if exists {
+			return input, nil
+		}
+	}
+	// Otherwise search by exact label
+	var id string
+	var err error
+	if db.isPostgres {
+		err = db.QueryRow(`SELECT id FROM components WHERE label = $1 ORDER BY created_at LIMIT 1`, input).Scan(&id)
+	} else {
+		err = db.QueryRow(`SELECT id FROM components WHERE label = ? ORDER BY created_at LIMIT 1`, input).Scan(&id)
+	}
+	if err != nil {
+		// Log all available components for debugging
+		rows, qErr := db.Query(`SELECT id, label FROM components`)
+		if qErr == nil {
+			defer rows.Close()
+			var available []string
+			for rows.Next() {
+				var cid, clabel string
+				if rows.Scan(&cid, &clabel) == nil {
+					available = append(available, fmt.Sprintf("'%s' (id=%s)", clabel, cid))
+				}
+			}
+			log.Printf("resolveComponentID: '%s' not found. Available: %v", input, available)
+		}
+		return "", fmt.Errorf("no component found with label or id '%s'", input)
+	}
+	return id, nil
+}
+
+func findComponentByLabel(db *DB, label string) (foundComponent, bool, error) {
+	var component foundComponent
+	query := fmt.Sprintf(`SELECT id, type, label FROM components WHERE LOWER(label) = LOWER(%s) ORDER BY created_at LIMIT 1`, db.ph(1))
+	err := db.QueryRow(query, label).Scan(&component.ID, &component.Type, &component.Label)
+	if errors.Is(err, sql.ErrNoRows) {
+		return foundComponent{}, false, nil
+	}
+	if err != nil {
+		return foundComponent{}, false, err
+	}
+	return component, true, nil
+}
+
+func findEdge(db *DB, sourceID, targetID string) (string, bool, error) {
+	var id string
+	query := fmt.Sprintf(`SELECT id FROM edges WHERE source_id = %s AND target_id = %s ORDER BY created_at LIMIT 1`, db.ph(1), db.ph(2))
+	err := db.QueryRow(query, sourceID, targetID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return id, true, nil
 }
 
 func findComponent(db *DB, query string) ([]foundComponent, error) {

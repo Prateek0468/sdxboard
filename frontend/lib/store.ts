@@ -129,7 +129,14 @@ const asNode = (component: ApiComponent): Node => {
     data: { label: component.label, type: component.type, color: info.color },
   };
 };
-const asEdge = (edge: ApiEdge): Edge => ({ id: edge.id, source: edge.sourceId, target: edge.targetId, label: edge.label || undefined });
+const asEdge = (edge: ApiEdge): Edge => ({
+  id: edge.id,
+  source: edge.sourceId,
+  sourceHandle: "output",
+  target: edge.targetId,
+  targetHandle: "input",
+  label: edge.label || undefined,
+});
 
 type ApiComponent = { id: string; type: string; label: string; x: number; y: number; metadata?: unknown };
 type ApiEdge = { id: string; sourceId: string; targetId: string; label?: string };

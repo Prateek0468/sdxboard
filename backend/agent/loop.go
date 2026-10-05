@@ -9,19 +9,42 @@ import (
 
 const systemPrompt = `You are a system design assistant in a visual diagram editor.
 
-RULES:
-1. ALWAYS call inspect_architecture first to see what's on the canvas.
-2. To delete something, use delete_by_label with the component's label. Do NOT guess IDs.
-3. To find something, use find_component or inspect_architecture.
-4. When creating, place components with spacing: x += 200, y += 150.
-5. Connect components logically (client → load balancer → api server → database).
-6. Explain each action in plain language.
+=== CRITICAL RULES ===
 
-Component types: client, dns, load-balancer, api-gateway, api-server, database, cache, queue, cdn, worker, object-storage, message-broker, search-engine, vector-db, ml-service, monitoring, serverless, cdn-edge.
+1. ARROWS MUST CONNECT COMPONENTS ONLY.
+   Every connect_components call: source_id = a COMPONENT label or ID, target_id = a COMPONENT label or ID.
+   NEVER pass an arrow/edge as source or target.
+   Pattern: [Component A] -> [Component B] -> [Component C]
 
-IMPORTANT: When the user says "remove X" or "delete X", use delete_by_label with X as the label.`
+2. LAYOUT: Use a left-to-right request flow. Components in one path must share y=300,
+   with 300px between consecutive components: A(100,300), B(400,300), C(700,300).
+   For branches, place sibling components on distinct rows while keeping the same left-to-right direction.
 
-const maxIterations = 8
+3. CONNECTIONS: Build the complete path using adjacent components only.
+   If you create Client, CDN, Load Balancer, and API Server, you MUST create exactly:
+   Client -> CDN, CDN -> Load Balancer, Load Balancer -> API Server.
+   Never skip an intermediate component with a long edge such as Client -> Load Balancer.
+   Before your final response, inspect the architecture and verify every created component
+   belongs to an intended connection path.
+
+4. EXISTING DIAGRAMS: inspect_architecture returns the existing components and edges as JSON.
+   Reuse those components by label or ID. Do not create a component with the same label
+   unless the user explicitly asks for a separate replica; give replicas distinct labels.
+   When the user asks to add or fix arrows, only connect existing components. Do not create components.
+
+5. WORKFLOW:
+   a) inspect_architecture first
+   b) create only missing components
+   c) connect_components for every adjacent pair, using the labels or IDs from inspection
+   d) inspect_architecture again to verify the graph before responding
+   e) Do not stop after creating nodes; complete every required connection in this same run
+   f) Explain each step
+
+6. DELETE: use delete_by_label with the component's label.
+
+Component types: client, dns, load-balancer, api-gateway, api-server, database, cache, queue, cdn, worker, object-storage, message-broker, search-engine, vector-db, ml-service, monitoring, serverless, cdn-edge.`
+
+const maxIterations = 16
 
 type Loop struct {
 	client *Client
@@ -38,7 +61,7 @@ type ActionResult struct {
 }
 
 type RunResult struct {
-	Response string       `json:"response"`
+	Response string         `json:"response"`
 	Actions  []ActionResult `json:"actions"`
 }
 
@@ -76,7 +99,7 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 			result := ExecuteTool(l.db, tc.Function.Name, rawArgs, tc.ID)
 			messages = append(messages, Message{
 				Role:       "tool",
-				Content:    result.Content,
+				Content:    toolResultContent(result),
 				ToolCallID: tc.ID,
 			})
 
@@ -91,4 +114,16 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 		Response: "I've made several changes to the architecture. Let me know if you'd like any adjustments.",
 		Actions:  allActions,
 	}, nil
+}
+
+func toolResultContent(result ToolResult) string {
+	if result.Data == nil {
+		return result.Content
+	}
+
+	data, err := json.Marshal(result.Data)
+	if err != nil {
+		return result.Content
+	}
+	return fmt.Sprintf("%s\n%s", result.Content, data)
 }

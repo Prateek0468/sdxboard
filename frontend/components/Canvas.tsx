@@ -183,6 +183,9 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={{ type: "default" }}
+        connectionRadius={30}
+        snapToGrid
+        snapGrid={[10, 10]}
         onInit={(instance) => { flowRef.current = instance; }}
         onMove={(_, nextViewport) => setViewport(nextViewport)}
         onConnect={onConnect}
