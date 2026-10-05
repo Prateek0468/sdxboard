@@ -311,7 +311,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 func internalError(w http.ResponseWriter, err error) {
 	log.Printf("internal error: %v", err)
-	writeError(w, http.StatusInternalServerError, "internal server error")
+	writeError(w, http.StatusInternalServerError, err.Error())
 }
 
 func pathID(r *http.Request) string {

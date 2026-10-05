@@ -24,7 +24,16 @@ async function proxyRequest(req: NextRequest, path: string) {
     init.duplex = "half";
   }
 
-  const res = await fetch(target, init);
+  let res: Response;
+  try {
+    res = await fetch(target, init);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: `Cannot reach backend at ${BACKEND}: ${message}` },
+      { status: 502 },
+    );
+  }
 
   const responseHeaders = new Headers();
   res.headers.forEach((value, key) => {

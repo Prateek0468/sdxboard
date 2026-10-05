@@ -157,8 +157,19 @@ type GraphStore = {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${api}${path}`, { headers: { "Content-Type": "application/json" }, ...options });
-  if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-  return response.status === 204 ? undefined as T : response.json();
+  if (response.status === 204) return undefined as T;
+  const raw = await response.text();
+  if (!response.ok) {
+    let detail = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      detail = parsed?.error ?? parsed?.message ?? raw;
+    } catch {
+      // keep raw body
+    }
+    throw new Error(detail || `Request failed with status ${response.status}`);
+  }
+  return (raw ? JSON.parse(raw) : undefined) as T;
 }
 
 export const useGraphStore = create<GraphStore>((set, get) => ({
@@ -207,6 +218,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   actions?: { action: string; detail: string }[];
+  error?: boolean;
 };
 
 type ChatStore = {
@@ -239,9 +251,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }));
       useGraphStore.getState().load();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
+      const msg = err instanceof Error ? err.message : String(err);
       set((state) => ({
-        messages: [...state.messages, { role: "assistant", content: `Sorry, something went wrong: ${msg}` }],
+        messages: [...state.messages, { role: "assistant", content: msg, error: true }],
         status: "",
       }));
     } finally {

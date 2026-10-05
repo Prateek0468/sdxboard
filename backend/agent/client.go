@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -112,7 +113,7 @@ func (c *Client) ChatCompletion(messages []Message, tools []ToolDef) (*Message, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("%s", describeAPIError(resp.StatusCode, respBody))
 	}
 
 	var result completionResponse
@@ -129,4 +130,23 @@ func (c *Client) ChatCompletion(messages []Message, tools []ToolDef) (*Message, 
 	}
 
 	return &result.Choices[0].Message, nil
+}
+
+// describeAPIError extracts a human-readable message from an OpenRouter error response.
+func describeAPIError(status int, body []byte) string {
+	var parsed struct {
+		Error *struct {
+			Message string `json:"message"`
+			Code    any    `json:"code"`
+			Meta    any    `json:"meta"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil && parsed.Error != nil && parsed.Error.Message != "" {
+		return fmt.Sprintf("OpenRouter error (HTTP %d): %s", status, parsed.Error.Message)
+	}
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return fmt.Sprintf("OpenRouter error (HTTP %d): empty response body", status)
+	}
+	return fmt.Sprintf("OpenRouter error (HTTP %d): %s", status, trimmed)
 }
