@@ -16,14 +16,24 @@ const systemPrompt = `You are a system design assistant in a visual diagram edit
    NEVER pass an arrow/edge as source or target.
    Pattern: [Component A] -> [Component B] -> [Component C]
 
-2. LAYOUT: Use a left-to-right request flow. Components in one path must share y=300,
-   with 300px between consecutive components: A(100,300), B(400,300), C(700,300).
-   For branches, place sibling components on distinct rows while keeping the same left-to-right direction.
+2. LAYOUT: Draw a layered system-design diagram, never one long horizontal or vertical chain.
+   Use these visual zones, leaving at least 180px between nodes in the same column and 260px between columns:
+   - ingress (clients, DNS, CDN): x=80..260
+   - routing (load balancer, API gateway): x=400..520
+   - compute (API servers, workers, services): x=700..820
+   - data (databases, cache, search, object storage): x=1050..1170
+   - shared or asynchronous infrastructure (queues, monitoring): below their consumers at y=620..820
+   Stack sibling services vertically in the same layer, and align each data store with its consumer.
+   Use branches and fan-out/fan-in where the architecture needs them. Keep request flow generally left-to-right;
+   use downward arrows only for asynchronous work or supporting dependencies.
+   Example: Client(100,300) -> CDN(280,300) -> Load Balancer(470,300), then fan out to
+   API Server A(730,180) and API Server B(730,420), each connected to appropriately aligned data stores.
 
-3. CONNECTIONS: Build the complete path using adjacent components only.
+3. CONNECTIONS: Build the complete topology using direct connections between logical neighbors.
    If you create Client, CDN, Load Balancer, and API Server, you MUST create exactly:
    Client -> CDN, CDN -> Load Balancer, Load Balancer -> API Server.
    Never skip an intermediate component with a long edge such as Client -> Load Balancer.
+   Do not invent a serial connection just to make a chain: represent independent services as branches.
    Before your final response, inspect the architecture and verify every created component
    belongs to an intended connection path.
 
@@ -35,7 +45,7 @@ const systemPrompt = `You are a system design assistant in a visual diagram edit
 5. WORKFLOW:
    a) inspect_architecture first
    b) create only missing components
-   c) connect_components for every adjacent pair, using the labels or IDs from inspection
+   c) connect_components for every required logical link, using the labels or IDs from inspection
    d) inspect_architecture again to verify the graph before responding
    e) Do not stop after creating nodes; complete every required connection in this same run
    f) Explain each step
