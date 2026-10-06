@@ -16,18 +16,14 @@ const systemPrompt = `You are a system design assistant in a visual diagram edit
    NEVER pass an arrow/edge as source or target.
    Pattern: [Component A] -> [Component B] -> [Component C]
 
-2. LAYOUT: Draw a layered system-design diagram, never one long horizontal or vertical chain.
-   Use these visual zones, leaving at least 180px between nodes in the same column and 260px between columns:
-   - ingress (clients, DNS, CDN): x=80..260
-   - routing (load balancer, API gateway): x=400..520
-   - compute (API servers, workers, services): x=700..820
-   - data (databases, cache, search, object storage): x=1050..1170
-   - shared or asynchronous infrastructure (queues, monitoring): below their consumers at y=620..820
-   Stack sibling services vertically in the same layer, and align each data store with its consumer.
-   Use branches and fan-out/fan-in where the architecture needs them. Keep request flow generally left-to-right;
-   use downward arrows only for asynchronous work or supporting dependencies.
-   Example: Client(100,300) -> CDN(280,300) -> Load Balancer(470,300), then fan out to
-   API Server A(730,180) and API Server B(730,420), each connected to appropriately aligned data stores.
+2. LAYOUT: positions are auto-arranged after every run, so IGNORE coordinates entirely.
+   Only decide the topology:
+   - Request flow reads left-to-right: ingress -> routing -> compute -> data.
+   - Fan out branches where the architecture needs them; do not force one long chain.
+   - Put asynchronous or supporting dependencies (queues, workers, monitoring)
+     downstream of the components they serve.
+   - Connect only logically adjacent components so arrows stay short and never
+     cut across unrelated components.
 
 3. CONNECTIONS: Build the complete topology using direct connections between logical neighbors.
    If you create Client, CDN, Load Balancer, and API Server, you MUST create exactly:
@@ -82,6 +78,7 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 	}
 	tools := Definitions()
 	var allActions []ActionResult
+	mutated := false
 
 	for i := 0; i < maxIterations; i++ {
 		resp, err := l.client.ChatCompletion(messages, tools)
@@ -90,6 +87,7 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 		}
 
 		if len(resp.ToolCalls) == 0 {
+			l.arrange(mutated)
 			return &RunResult{
 				Response: resp.Content,
 				Actions:  allActions,
@@ -117,13 +115,32 @@ func (l *Loop) Run(ctx context.Context, userMessage string) (*RunResult, error) 
 				Action: tc.Function.Name,
 				Detail: result.Content,
 			})
+
+			switch tc.Function.Name {
+			case "create_component", "connect_components", "update_component",
+				"delete_component", "delete_by_label":
+				mutated = true
+			}
 		}
 	}
 
+	l.arrange(mutated)
 	return &RunResult{
 		Response: "I've made several changes to the architecture. Let me know if you'd like any adjustments.",
 		Actions:  allActions,
 	}, nil
+}
+
+// arrange runs the deterministic layout pass after the agent changes the
+// diagram, so components always end up in a clean, non-overlapping arrangement
+// regardless of where the model chose to place them.
+func (l *Loop) arrange(mutated bool) {
+	if !mutated {
+		return
+	}
+	if err := AutoLayout(l.db); err != nil {
+		log.Printf("auto-layout failed: %v", err)
+	}
 }
 
 func toolResultContent(result ToolResult) string {
