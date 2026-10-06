@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
+  applyNodeChanges,
   Background,
   Connection,
   Controls,
   Edge,
   Node,
+  NodeChange,
   OnConnect,
   ReactFlowInstance,
   Viewport,
@@ -18,6 +20,7 @@ import {
   useToolStore,
   useArrowStore,
   ComponentType,
+  snapshot,
 } from "../lib/store";
 import SystemNode from "./SystemNode";
 import TextNode from "./TextNode";
@@ -52,7 +55,7 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
     addTextNode,
   } = useGraphStore();
 
-  const allNodes = [...nodes, ...textNodes];
+  const allNodes = useMemo(() => [...nodes, ...textNodes], [nodes, textNodes]);
 
   const handleUndo = useCallback(() => {
     const snap = useHistoryStore.getState().undo();
@@ -100,6 +103,20 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
     [removeEdges],
   );
 
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    const applicable = changes.filter((change) => change.type === "position" || change.type === "select");
+    if (!applicable.length) return;
+    const graph = useGraphStore.getState();
+    const graphIds = new Set(graph.nodes.map((n) => n.id));
+    const textIds = new Set(graph.textNodes.map((n) => n.id));
+    const graphChanges = applicable.filter((change) => graphIds.has(change.id));
+    const textChanges = applicable.filter((change) => textIds.has(change.id));
+    if (graphChanges.length) useGraphStore.setState({ nodes: applyNodeChanges(graphChanges, graph.nodes) });
+    if (textChanges.length) useGraphStore.setState({ textNodes: applyNodeChanges(textChanges, graph.textNodes) });
+  }, []);
+
+  const onNodeDragStart = useCallback(() => snapshot(), []);
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -112,10 +129,13 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
   );
 
   const onNodeDragStop = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      const existing = timers.current.get(node.id);
-      if (existing) clearTimeout(existing);
-      timers.current.set(node.id, setTimeout(() => updatePosition(node.id, node.position), 250));
+    (_: React.MouseEvent, node: Node, dragged?: Node[]) => {
+      const list = dragged?.length ? dragged : [node];
+      for (const item of list) {
+        const existing = timers.current.get(item.id);
+        if (existing) clearTimeout(existing);
+        timers.current.set(item.id, setTimeout(() => updatePosition(item.id, item.position), 250));
+      }
     },
     [updatePosition],
   );
@@ -202,7 +222,10 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         onInit={(instance) => { flowRef.current = instance; }}
         onMove={(_, nextViewport) => setViewport(nextViewport)}
         onConnect={onConnect}
+        onNodesChange={onNodesChange}
+        onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
+        nodeDragThreshold={4}
         onNodesDelete={onNodesDelete}
         onEdgesDelete={onEdgesDelete}
         onSelectionChange={onSelectionChange}

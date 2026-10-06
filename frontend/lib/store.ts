@@ -51,7 +51,7 @@ export const useHistoryStore = create<{
   clear: () => set({ past: [], future: [] }),
 }));
 
-function snapshot() {
+export function snapshot() {
   const { nodes, edges } = useGraphStore.getState();
   useHistoryStore.getState().record({ nodes, edges });
 }
@@ -177,7 +177,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   load: async () => { const graph = await request<{ components: ApiComponent[]; edges: ApiEdge[] }>("/architecture"); set({ nodes: graph.components.map(asNode), edges: graph.edges.map(asEdge) }); useHistoryStore.getState().clear(); },
   addComponent: async (type, position) => { snapshot(); const { label } = typeInfo(type); const component = await request<ApiComponent>("/components", { method: "POST", body: JSON.stringify({ type, label, x: position.x, y: position.y }) }); set((state) => ({ nodes: [...state.nodes, asNode(component)] })); },
   connect: async (sourceId, targetId) => { snapshot(); const edge = await request<ApiEdge>("/edges", { method: "POST", body: JSON.stringify({ sourceId, targetId }) }); set((state) => ({ edges: addEdge(asEdge(edge), state.edges) })); },
-  updatePosition: async (id, position) => { snapshot(); const node = get().nodes.find((item) => item.id === id); if (!node) return; set((state) => ({ nodes: state.nodes.map((item) => item.id === id ? { ...item, position } : item) })); await request(`/components/${id}`, { method: "PUT", body: JSON.stringify({ label: String(node.data.label), x: position.x, y: position.y, metadata: null }) }); },
+  updatePosition: async (id, position) => { const node = get().nodes.find((item) => item.id === id); if (!node) return; set((state) => ({ nodes: state.nodes.map((item) => item.id === id ? { ...item, position } : item) })); await request(`/components/${id}`, { method: "PUT", body: JSON.stringify({ label: String(node.data.label), x: position.x, y: position.y, metadata: null }) }); },
   removeNodes: async (ids) => { snapshot(); const textIds = get().textNodes.map((n) => n.id); const dbIds = ids.filter((id) => !textIds.includes(id) && !id.startsWith("text-")); set((state) => ({ nodes: state.nodes.filter((node) => !ids.includes(node.id)), edges: state.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); if (dbIds.length) await Promise.all(dbIds.map((id) => request(`/components/${id}`, { method: "DELETE" }))); },
   removeEdges: async (ids) => { snapshot(); set((state) => ({ edges: state.edges.filter((edge) => !ids.includes(edge.id)) })); await Promise.all(ids.map((id) => request(`/edges/${id}`, { method: "DELETE" }))); },
   clearAll: async () => {
