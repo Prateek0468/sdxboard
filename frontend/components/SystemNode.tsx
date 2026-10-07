@@ -32,7 +32,7 @@ export default function SystemNode({ id, data }: NodeProps<SystemNodeData>) {
   return (
     <div
       className="group relative flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing px-3 py-2 rounded-xl transition-shadow hover:shadow-md"
-      onClick={(e) => { e.stopPropagation(); selectNode(id); }}
+      onClick={(e) => selectNode(id)}
     >
       <Handle id="input" type="target" position={Position.Left} style={handleStyle} />
       <Handle id="output" type="source" position={Position.Right} style={handleStyle} />

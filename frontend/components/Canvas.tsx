@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
+  applyEdgeChanges,
   applyNodeChanges,
   Background,
   Connection,
   Controls,
   Edge,
+  EdgeChange,
   Node,
   NodeChange,
   OnConnect,
   ReactFlowInstance,
+  SelectionMode,
   Viewport,
 } from "reactflow";
 import { MousePointer2, Type, MoveRight, Undo2, Redo2, Trash2, MessageCircle, X } from "lucide-react";
@@ -116,6 +119,12 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
   }, []);
 
   const onNodeDragStart = useCallback(() => snapshot(), []);
+
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    const applicable = changes.filter((change) => change.type === "select");
+    if (!applicable.length) return;
+    useGraphStore.setState((s) => ({ edges: applyEdgeChanges(applicable, s.edges) }));
+  }, []);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -223,6 +232,7 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         onMove={(_, nextViewport) => setViewport(nextViewport)}
         onConnect={onConnect}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         nodeDragThreshold={4}
@@ -231,8 +241,9 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         onSelectionChange={onSelectionChange}
         onPaneClick={onPaneClick}
         selectionOnDrag={!isArrowMode}
+        selectionMode={SelectionMode.Partial}
         panOnScroll={!isArrowMode}
-        panOnDrag={!isArrowMode}
+        panOnDrag={!isArrowMode ? [1, 2] : false}
         nodesDraggable={!isArrowMode}
         nodesConnectable={!isArrowMode}
         multiSelectionKeyCode="Meta"

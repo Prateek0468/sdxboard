@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import {
   BaseEdge,
   EdgeProps,
@@ -134,8 +134,8 @@ export default function DeletableEdge({
   targetY,
   targetPosition,
   label,
+  selected,
 }: EdgeProps) {
-  const [selected, setSelected] = useState(false);
   const getNode = useReactFlow().getNode;
 
   const sourceNode = getNode(source);
@@ -164,36 +164,8 @@ export default function DeletableEdge({
     useGraphStore.getState().removeEdges([id]);
   }, [id]);
 
-  useEffect(() => {
-    if (!selected) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") {
-        const target = e.target as HTMLElement;
-        if (target.matches("input, textarea, [contenteditable='true']")) return;
-        e.preventDefault();
-        handleDelete();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [selected, handleDelete]);
-
-  // Deselect when clicking elsewhere
-  useEffect(() => {
-    if (!selected) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest(".react-flow__edge")) {
-        setSelected(false);
-      }
-    };
-    window.addEventListener("mousedown", handler);
-    return () => window.removeEventListener("mousedown", handler);
-  }, [selected]);
-
   const handleMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelected(true);
   };
 
   return (
