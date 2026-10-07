@@ -132,19 +132,19 @@ Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works a
 - [x] Basic agent loop: prompt → tool call → execute → feed result back → repeat until model stops
 - [x] Frontend: chat sidebar next to canvas
 - [x] Canvas updates live as agent creates components (poll after agent turn)
-- [ ] Test: "Design a URL shortener" produces a sensible starter architecture
-- [ ] Test: "Add caching" correctly modifies existing graph, not a fresh one
+- [x] Test: "Design a URL shortener" produces a sensible starter architecture
+- [x] Test: "Add caching" correctly modifies existing graph, not a fresh one
 
 > **Milestone:** You type a prompt, watch nodes appear one by one, then give one follow-up instruction that correctly edits the existing diagram.
 
 ### Phase 2 — Full Component Model
 
-- [ ] Expand palette to full component list (DNS, CDN, Kafka, Vector DB, LLM, etc.)
+- [x] Expand palette to full component list (DNS, CDN, Kafka, Vector DB, LLM, etc.)
 - [ ] Add structured metadata fields per component type (capacity, latency, replication, etc.)
-- [ ] Metadata edit panel in UI (click node → side panel with fields)
-- [ ] `update_component` tool (agent can modify metadata, not just create/delete)
+- [x] Metadata edit panel in UI (click node → side panel with fields)
+- [x] `update_component` tool (agent can modify metadata, not just create/delete)
 - [ ] `move_component` tool
-- [ ] `find_component` tool (agent can locate by type/label without full graph dump)
+- [x] `find_component` tool (agent can locate by type/label without full graph dump)
 - [ ] Test: "Replace PostgreSQL with DynamoDB" works via update/delete/create combo
 
 ### Phase 3 — Canvas Polish
@@ -155,7 +155,7 @@ Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works a
 - [ ] Grouping
 - [ ] Save/load named diagrams (not just one live graph)
 - [ ] Export diagram as PNG/SVG
-- [ ] Keyboard shortcuts (delete, escape, etc.)
+- [x] Keyboard shortcuts (delete, escape, etc.)
 
 ### Phase 4 — Architecture Reviewer
 
