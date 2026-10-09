@@ -153,7 +153,7 @@ Without `OPENROUTER_API_KEY`, the agent endpoint is disabled and the app works a
 - [x] Multi-select
 - [ ] Copy/paste
 - [ ] Grouping
-- [ ] Save/load named diagrams (not just one live graph)
+- [x] Save/load named diagrams (not just one live graph)
 - [ ] Export diagram as PNG/SVG
 - [x] Keyboard shortcuts (delete, escape, etc.)
 

@@ -16,7 +16,7 @@ import ReactFlow, {
   SelectionMode,
   Viewport,
 } from "reactflow";
-import { MousePointer2, Type, MoveRight, Undo2, Redo2, Trash2, MessageCircle, X } from "lucide-react";
+import { MousePointer2, Type, MoveRight, Undo2, Redo2, Trash2, MessageCircle, X, Save, FolderOpen, Check } from "lucide-react";
 import {
   useGraphStore,
   useHistoryStore,
@@ -30,6 +30,7 @@ import TextNode from "./TextNode";
 import DeletableEdge from "./DeletableEdge";
 import ArrowOverlay from "./ArrowOverlay";
 import ConfirmModal from "./ConfirmModal";
+import { SaveDialog, OpenDialog } from "./DiagramModals";
 
 const nodeTypes = { system: SystemNode, text: TextNode };
 const edgeTypes = { default: DeletableEdge };
@@ -60,6 +61,10 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
 
   const allNodes = useMemo(() => [...nodes, ...textNodes], [nodes, textNodes]);
 
+  useEffect(() => {
+    if (selectedCount > 0 && !allNodes.some((n) => n.selected)) setSelectedCount(0);
+  }, [allNodes, selectedCount]);
+
   const handleUndo = useCallback(() => {
     const snap = useHistoryStore.getState().undo();
     if (snap) {
@@ -76,6 +81,8 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.matches?.("input, textarea, [contenteditable='true']")) return;
       const isMod = e.metaKey || e.ctrlKey;
       if (isMod && e.key === "z" && !e.shiftKey) { e.preventDefault(); handleUndo(); }
       if (isMod && e.key === "z" && e.shiftKey) { e.preventDefault(); handleRedo(); }
@@ -169,8 +176,27 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
   const canUndo = useHistoryStore((s) => s.past.length > 0);
   const canRedo = useHistoryStore((s) => s.future.length > 0);
   const clearAll = useGraphStore((s) => s.clearAll);
+  const currentDiagramId = useGraphStore((s) => s.currentDiagramId);
   const hasContent = nodes.length > 0 || textNodes.length > 0;
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [openDialogOpen, setOpenDialogOpen] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  const handleSave = useCallback(async () => {
+    const store = useGraphStore.getState();
+    if (!store.currentDiagramId) {
+      setSaveDialogOpen(true);
+      return;
+    }
+    try {
+      await store.saveDiagram();
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1500);
+    } catch {
+      setSaveDialogOpen(true);
+    }
+  }, []);
 
   const isArrowMode = toolMode === "arrow";
 
@@ -216,6 +242,22 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         <button onClick={handleRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)"
           className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150">
           <Redo2 size={15} />
+        </button>
+        <div className="w-px h-5 bg-slate-200/60 mx-1" />
+        <button
+          onClick={handleSave}
+          disabled={!hasContent}
+          title={currentDiagramId ? "Save" : "Save as…"}
+          className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150"
+        >
+          {savedFlash ? <Check size={15} className="text-emerald-500" /> : <Save size={15} />}
+        </button>
+        <button
+          onClick={() => setOpenDialogOpen(true)}
+          title="Open diagram"
+          className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all duration-150"
+        >
+          <FolderOpen size={15} />
         </button>
       </div>
 
@@ -263,6 +305,9 @@ export default function Canvas({ chatOpen, onToggleChat }: CanvasProps) {
         onConfirm={() => { clearAll(); setConfirmOpen(false); }}
         onCancel={() => setConfirmOpen(false)}
       />
+
+      <SaveDialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)} />
+      <OpenDialog open={openDialogOpen} onClose={() => setOpenDialogOpen(false)} />
 
       {/* Selection bar */}
       {selectedCount > 0 && (

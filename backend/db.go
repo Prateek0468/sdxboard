@@ -74,6 +74,13 @@ func migrate(db *sql.DB) error {
 			FOREIGN KEY (source_id) REFERENCES components(id) ON DELETE CASCADE,
 			FOREIGN KEY (target_id) REFERENCES components(id) ON DELETE CASCADE
 		);
+		CREATE TABLE IF NOT EXISTS diagrams (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			payload TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	if err != nil {
 		// SQLite uses ? for placeholders; PostgreSQL uses $1. The schema above

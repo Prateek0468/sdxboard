@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -62,6 +63,11 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/components/{id}", s.deleteComponent)
 	mux.HandleFunc("POST /api/edges", s.createEdge)
 	mux.HandleFunc("DELETE /api/edges/{id}", s.deleteEdge)
+	mux.HandleFunc("GET /api/diagrams", s.listDiagrams)
+	mux.HandleFunc("POST /api/diagrams", s.createDiagram)
+	mux.HandleFunc("PUT /api/diagrams/{id}", s.updateDiagram)
+	mux.HandleFunc("DELETE /api/diagrams/{id}", s.deleteDiagram)
+	mux.HandleFunc("POST /api/diagrams/{id}/open", s.openDiagram)
 	if s.agentHandler != nil {
 		mux.HandleFunc("POST /api/agent/message", s.agentHandler.HandleMessage)
 	}
@@ -226,6 +232,197 @@ func (s *server) deleteEdge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- Diagrams (named snapshots of the canvas) ---
+
+type diagram struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// The stored payload keeps textNodes and arrows as opaque JSON so they
+// round-trip untouched; only components and edges are needed server-side
+// to rebuild the live working tables when a diagram is opened.
+type diagramPayload struct {
+	Components []struct {
+		ID       string          `json:"id"`
+		Type     string          `json:"type"`
+		Label    string          `json:"label"`
+		X        float64         `json:"x"`
+		Y        float64         `json:"y"`
+		Metadata json.RawMessage `json:"metadata"`
+	} `json:"components"`
+	Edges []struct {
+		ID       string  `json:"id"`
+		SourceID string  `json:"sourceId"`
+		TargetID string  `json:"targetId"`
+		Label    *string `json:"label"`
+	} `json:"edges"`
+}
+
+func (s *server) listDiagrams(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.Query(`SELECT id, name, created_at, updated_at FROM diagrams ORDER BY updated_at DESC`)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer rows.Close()
+	items := []diagram{}
+	for rows.Next() {
+		var d diagram
+		if err := rows.Scan(&d.ID, &d.Name, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			internalError(w, err)
+			return
+		}
+		items = append(items, d)
+	}
+	if err := rows.Err(); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *server) createDiagram(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name    string
+		Payload json.RawMessage
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if len(input.Payload) == 0 {
+		writeError(w, http.StatusBadRequest, "payload is required")
+		return
+	}
+	id := uuid.NewString()
+	_, err := s.db.Exec(
+		fmt.Sprintf(`INSERT INTO diagrams (id, name, payload) VALUES (%s, %s, %s)`, s.ph(1), s.ph(2), s.ph(3)),
+		id, input.Name, string(input.Payload),
+	)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "name": input.Name})
+}
+
+func (s *server) updateDiagram(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Payload json.RawMessage
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if len(input.Payload) == 0 {
+		writeError(w, http.StatusBadRequest, "payload is required")
+		return
+	}
+	id := r.PathValue("id")
+	result, err := s.db.Exec(
+		fmt.Sprintf(`UPDATE diagrams SET payload = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s`, s.ph(1), s.ph(2)),
+		string(input.Payload), id,
+	)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		writeError(w, http.StatusNotFound, "diagram not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": id})
+}
+
+func (s *server) deleteDiagram(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	result, err := s.db.Exec(fmt.Sprintf(`DELETE FROM diagrams WHERE id = %s`, s.ph(1)), id)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		writeError(w, http.StatusNotFound, "diagram not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// openDiagram replaces the live working tables with the diagram's snapshot
+// so the agent always operates on what is on screen, then returns the raw
+// payload for the frontend to rebuild its stores.
+func (s *server) openDiagram(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var payload string
+	err := s.db.QueryRow(fmt.Sprintf(`SELECT payload FROM diagrams WHERE id = %s`, s.ph(1)), id).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "diagram not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	var p diagramPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		writeError(w, http.StatusBadRequest, "diagram payload is invalid")
+		return
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if _, err := tx.Exec(`DELETE FROM edges`); err != nil {
+		tx.Rollback()
+		internalError(w, err)
+		return
+	}
+	if _, err := tx.Exec(`DELETE FROM components`); err != nil {
+		tx.Rollback()
+		internalError(w, err)
+		return
+	}
+	for _, c := range p.Components {
+		_, err := tx.Exec(
+			fmt.Sprintf(`INSERT INTO components (id, type, label, x, y, metadata) VALUES (%s, %s, %s, %s, %s, %s)`, s.ph(1), s.ph(2), s.ph(3), s.ph(4), s.ph(5), s.ph(6)),
+			c.ID, c.Type, c.Label, c.X, c.Y, nullableJSON(c.Metadata),
+		)
+		if err != nil {
+			tx.Rollback()
+			internalError(w, err)
+			return
+		}
+	}
+	for _, e := range p.Edges {
+		var label any
+		if e.Label != nil && *e.Label != "" {
+			label = *e.Label
+		}
+		_, err := tx.Exec(
+			fmt.Sprintf(`INSERT INTO edges (id, source_id, target_id, label) VALUES (%s, %s, %s, %s)`, s.ph(1), s.ph(2), s.ph(3), s.ph(4)),
+			e.ID, e.SourceID, e.TargetID, label,
+		)
+		if err != nil {
+			tx.Rollback()
+			internalError(w, err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(payload))
 }
 
 func (s *server) listComponents() ([]component, error) {

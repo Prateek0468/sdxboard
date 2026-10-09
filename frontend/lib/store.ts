@@ -126,7 +126,7 @@ const asNode = (component: ApiComponent): Node => {
     id: component.id,
     type: "system",
     position: { x: component.x, y: component.y },
-    data: { label: component.label, type: component.type, color: info.color },
+    data: { label: component.label, type: component.type, color: info.color, metadata: component.metadata },
   };
 };
 const asEdge = (edge: ApiEdge): Edge => ({
@@ -137,6 +137,25 @@ const asEdge = (edge: ApiEdge): Edge => ({
   targetHandle: "input",
   label: edge.label || undefined,
 });
+const toApiComponent = (node: Node): ApiComponent => ({
+  id: node.id,
+  type: String(node.data.type ?? "api-server"),
+  label: String(node.data.label ?? ""),
+  x: node.position.x,
+  y: node.position.y,
+  metadata: node.data.metadata,
+});
+
+export type DiagramSummary = { id: string; name: string; createdAt: string; updatedAt: string };
+type SavedTextNode = { id: string; x: number; y: number; label: string };
+type DiagramPayload = {
+  components: ApiComponent[];
+  edges: ApiEdge[];
+  textNodes: SavedTextNode[];
+  arrows: ArrowData[];
+};
+
+const DIAGRAM_KEY = "sdxboard.diagramId";
 
 type ApiComponent = { id: string; type: string; label: string; x: number; y: number; metadata?: unknown };
 type ApiEdge = { id: string; sourceId: string; targetId: string; label?: string };
@@ -153,6 +172,11 @@ type GraphStore = {
   updateTextNode: (id: string, label: string) => void;
   removeTextNode: (id: string) => void;
   clearAll: () => Promise<void>;
+  currentDiagramId: string | null;
+  listDiagrams: () => Promise<DiagramSummary[]>;
+  saveDiagram: (name?: string) => Promise<string>;
+  openDiagram: (id: string) => Promise<void>;
+  deleteDiagram: (id: string) => Promise<void>;
 };
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -199,6 +223,54 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   },
   removeTextNode: (id) => {
     set((state) => ({ textNodes: state.textNodes.filter((n) => n.id !== id) }));
+  },
+  currentDiagramId: typeof localStorage !== "undefined" ? localStorage.getItem(DIAGRAM_KEY) : null,
+  listDiagrams: () => request<DiagramSummary[]>("/diagrams"),
+  saveDiagram: async (name) => {
+    const { nodes, edges, textNodes, currentDiagramId } = get();
+    const { arrows } = useArrowStore.getState();
+    const payload: DiagramPayload = {
+      components: nodes.map(toApiComponent),
+      edges: edges.map((e) => ({ id: e.id, sourceId: e.source, targetId: e.target, label: e.label ? String(e.label) : undefined })),
+      textNodes: textNodes.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, label: String(n.data.label ?? "") })),
+      arrows,
+    };
+    if (currentDiagramId && !name) {
+      await request(`/diagrams/${currentDiagramId}`, { method: "PUT", body: JSON.stringify({ payload }) });
+      return currentDiagramId;
+    }
+    const finalName = name?.trim();
+    if (!finalName) throw new Error("diagram name is required");
+    const res = await request<{ id: string }>("/diagrams", { method: "POST", body: JSON.stringify({ name: finalName, payload }) });
+    set({ currentDiagramId: res.id });
+    localStorage.setItem(DIAGRAM_KEY, res.id);
+    return res.id;
+  },
+  openDiagram: async (id) => {
+    const payload = await request<DiagramPayload>(`/diagrams/${id}/open`, { method: "POST" });
+    set({
+      nodes: (payload.components ?? []).map(asNode),
+      edges: (payload.edges ?? []).map(asEdge),
+      textNodes: (payload.textNodes ?? []).map((t) => ({
+        id: t.id,
+        type: "text",
+        position: { x: t.x, y: t.y },
+        draggable: true,
+        data: { label: t.label },
+      })),
+      currentDiagramId: id,
+    });
+    useArrowStore.setState({ arrows: payload.arrows ?? [] });
+    useHistoryStore.getState().clear();
+    useSelectionStore.getState().selectNode(null);
+    localStorage.setItem(DIAGRAM_KEY, id);
+  },
+  deleteDiagram: async (id) => {
+    await request(`/diagrams/${id}`, { method: "DELETE" });
+    if (get().currentDiagramId === id) {
+      set({ currentDiagramId: null });
+      localStorage.removeItem(DIAGRAM_KEY);
+    }
   },
 }));
 
